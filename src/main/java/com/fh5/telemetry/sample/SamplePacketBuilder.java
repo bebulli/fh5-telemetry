@@ -112,6 +112,14 @@ public final class SamplePacketBuilder {
         return buf.array();
     }
 
+    /** Sled is a strict prefix of Dash, so this just truncates the Dash bytes. */
+    public byte[] buildSled() {
+        byte[] dash = buildDash();
+        byte[] sled = new byte[232];
+        System.arraycopy(dash, 0, sled, 0, sled.length);
+        return sled;
+    }
+
     private static void putVector3(ByteBuffer buf, int offset, float[] xyz) {
         buf.putFloat(offset, xyz[0]);
         buf.putFloat(offset + 4, xyz[1]);
