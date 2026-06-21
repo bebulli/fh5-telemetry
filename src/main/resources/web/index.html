@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FH5 Telemetry</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>FH5 Telemetry</h1>
+  <div id="connection-form" class="row">
+    <label>Bind address <input id="bindAddress" type="text" placeholder="0.0.0.0 (all interfaces)"></label>
+    <label>Port <input id="port" type="number" value="6767"></label>
+    <button id="startListenerBtn">Start listening</button>
+    <span id="listenerStatus" class="status">not listening</span>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="live-panel">
+    <h2>Live telemetry <span id="drivingState" class="badge">-</span></h2>
+    <div class="grid">
+      <div class="stat"><span class="label">Speed</span><span id="speed" class="value">-</span></div>
+      <div class="stat"><span class="label">RPM</span><span id="rpm" class="value">-</span></div>
+      <div class="stat"><span class="label">Gear</span><span id="gear" class="value">-</span></div>
+      <div class="stat"><span class="label">Drivetrain</span><span id="drivetrain" class="value">-</span></div>
+      <div class="stat"><span class="label">Car ordinal / class / PI</span><span id="carInfo" class="value">-</span></div>
+      <div class="stat"><span class="label">Packets received</span><span id="packetsReceived" class="value">-</span></div>
+    </div>
+
+    <h3>Tire slip ratio</h3>
+    <div class="corners" id="slipRatio"><div>FL -</div><div>FR -</div><div>RL -</div><div>RR -</div></div>
+
+    <h3>Tire temp (C)</h3>
+    <div class="corners" id="tireTemp"><div>FL -</div><div>FR -</div><div>RL -</div><div>RR -</div></div>
+
+    <h3>Suspension travel</h3>
+    <div class="corners" id="suspTravel"><div>FL -</div><div>FR -</div><div>RL -</div><div>RR -</div></div>
+  </section>
+
+  <section class="card" id="recording-panel">
+    <h2>Recording</h2>
+    <div class="row">
+      <label>Session name <input id="recordingName" type="text" placeholder="optional"></label>
+      <button id="startRecordingBtn">Start recording</button>
+      <button id="stopRecordingBtn">Stop recording</button>
+      <button id="resetSampleBtn">Reset sample window</button>
+    </div>
+    <p id="recordingStatus" class="status">not recording</p>
+    <h3>Saved sessions</h3>
+    <ul id="recordingsList"></ul>
+  </section>
+
+  <section class="card" id="tuning-panel">
+    <h2>Tuning recommendation</h2>
+    <div class="row">
+      <label>Weight (kg) <input id="weightKg" type="number" value="1500"></label>
+      <label>Drivetrain
+        <select id="drivetrainInput">
+          <option value="FWD">FWD</option>
+          <option value="RWD">RWD</option>
+          <option value="AWD" selected>AWD</option>
+        </select>
+      </label>
+      <label>Power (hp) <input id="powerHp" type="number" value="550"></label>
+      <label>Performance Index <input id="performanceIndex" type="number" value="800"></label>
+      <label>Style
+        <select id="styleInput">
+          <option value="GRIP" selected>Grip</option>
+          <option value="DRIFT">Drift</option>
+        </select>
+      </label>
+      <button id="tuneBtn">Get recommendation</button>
+    </div>
+    <div id="tuningResult"></div>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
