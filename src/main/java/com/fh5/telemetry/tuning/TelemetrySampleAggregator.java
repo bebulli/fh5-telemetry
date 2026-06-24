@@ -21,7 +21,7 @@ public final class TelemetrySampleAggregator {
     private int dashCount;
     private float topSpeedMps;
 
-    public void add(TelemetryPacket packet) {
+    public synchronized void add(TelemetryPacket packet) {
         if (packet.drivingState() != DrivingState.DRIVING) {
             return;
         }
@@ -57,11 +57,11 @@ public final class TelemetrySampleAggregator {
         topSpeedMps = Math.max(topSpeedMps, packet.speedMps());
     }
 
-    public int sampleCount() {
+    public synchronized int sampleCount() {
         return count;
     }
 
-    public Optional<TelemetrySampleSummary> summarize() {
+    public synchronized Optional<TelemetrySampleSummary> summarize() {
         if (count == 0) {
             return Optional.empty();
         }
@@ -81,7 +81,7 @@ public final class TelemetrySampleAggregator {
                 topSpeedMps));
     }
 
-    public void reset() {
+    public synchronized void reset() {
         count = 0;
         dashCount = 0;
         slipRatioFL = slipRatioFR = slipRatioRL = slipRatioRR = 0;

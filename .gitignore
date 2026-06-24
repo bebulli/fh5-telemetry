@@ -5,3 +5,4 @@ target/
 .vscode/
 .mvn/wrapper/maven-wrapper.jar
 recordings/
+.claude/
