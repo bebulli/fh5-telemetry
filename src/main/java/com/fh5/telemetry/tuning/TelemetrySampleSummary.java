@@ -10,5 +10,6 @@ public record TelemetrySampleSummary(
         Corners avgTireSlipAngle,
         Corners avgSuspensionTravelNormalized,
         Optional<Corners> avgTireTempCelsius,
-        float topSpeedMps) {
+        float topSpeedMps,
+        Optional<Float> peakPowerHp) {
 }

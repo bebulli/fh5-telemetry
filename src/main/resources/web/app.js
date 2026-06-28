@@ -22,6 +22,13 @@ async function getJson(path) {
   return res.json();
 }
 
+function setIfNotFocused(id, value) {
+  const field = el(id);
+  if (document.activeElement !== field) {
+    field.value = value;
+  }
+}
+
 function corner(id, corners, digits) {
   const node = el(id);
   const fmt = (v) => Number(v).toFixed(digits);
@@ -62,6 +69,19 @@ async function refreshLatest() {
   if (t.tireTempCelsius) {
     corner("tireTemp", t.tireTempCelsius, 1);
   }
+
+  if (t.carPerformanceIndex > 0) {
+    setIfNotFocused("drivetrainInput", t.drivetrain);
+    setIfNotFocused("performanceIndex", t.carPerformanceIndex);
+  }
+}
+
+async function refreshSummary() {
+  const summary = await getJson("/api/telemetry/summary");
+  if (!summary || summary.peakPowerHp === undefined) {
+    return;
+  }
+  setIfNotFocused("powerHp", Math.round(summary.peakPowerHp));
 }
 
 async function refreshRecordings() {
@@ -149,6 +169,7 @@ el("tuneBtn").onclick = () =>
 setInterval(() => {
   refreshStatus().catch(() => {});
   refreshLatest().catch(() => {});
+  refreshSummary().catch(() => {});
 }, POLL_INTERVAL_MS);
 
 refreshStatus().catch(() => {});

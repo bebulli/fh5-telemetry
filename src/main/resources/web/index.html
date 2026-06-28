@@ -54,16 +54,16 @@
   <section class="card" id="tuning-panel">
     <h2>Tuning recommendation</h2>
     <div class="row">
-      <label>Weight (kg) <input id="weightKg" type="number" value="1500"></label>
-      <label>Drivetrain
+      <label>Weight (kg), not in telemetry <input id="weightKg" type="number" value="1500"></label>
+      <label>Drivetrain (auto-filled from telemetry)
         <select id="drivetrainInput">
           <option value="FWD">FWD</option>
           <option value="RWD">RWD</option>
           <option value="AWD" selected>AWD</option>
         </select>
       </label>
-      <label>Power (hp) <input id="powerHp" type="number" value="550"></label>
-      <label>Performance Index <input id="performanceIndex" type="number" value="800"></label>
+      <label>Power (hp), auto-filled from peak seen so far <input id="powerHp" type="number" value="550"></label>
+      <label>Performance Index (auto-filled from telemetry) <input id="performanceIndex" type="number" value="800"></label>
       <label>Style
         <select id="styleInput">
           <option value="GRIP" selected>Grip</option>

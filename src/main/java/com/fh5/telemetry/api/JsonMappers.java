@@ -79,6 +79,7 @@ final class JsonMappers {
         map.put("avgSuspensionTravelNormalized", corners(s.avgSuspensionTravelNormalized()));
         map.put("topSpeedMph", s.topSpeedMps() * 2.23694f);
         s.avgTireTempCelsius().ifPresent(temp -> map.put("avgTireTempCelsius", corners(temp)));
+        s.peakPowerHp().ifPresent(hp -> map.put("peakPowerHp", hp));
         return map;
     }
 

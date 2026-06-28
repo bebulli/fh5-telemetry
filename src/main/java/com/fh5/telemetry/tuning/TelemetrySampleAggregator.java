@@ -20,6 +20,7 @@ public final class TelemetrySampleAggregator {
     private float tireTempFL, tireTempFR, tireTempRL, tireTempRR;
     private int dashCount;
     private float topSpeedMps;
+    private float peakPowerWatts;
 
     public synchronized void add(TelemetryPacket packet) {
         if (packet.drivingState() != DrivingState.DRIVING) {
@@ -52,6 +53,7 @@ public final class TelemetrySampleAggregator {
             tireTempRL += temp.rearLeft();
             tireTempRR += temp.rearRight();
             dashCount++;
+            peakPowerWatts = Math.max(peakPowerWatts, dash.powerWatts());
         });
 
         topSpeedMps = Math.max(topSpeedMps, packet.speedMps());
@@ -72,13 +74,18 @@ public final class TelemetrySampleAggregator {
                         tireTempFL / dashCount, tireTempFR / dashCount,
                         tireTempRL / dashCount, tireTempRR / dashCount));
 
+        Optional<Float> peakPowerHp = dashCount == 0
+                ? Optional.empty()
+                : Optional.of(peakPowerWatts / 745.7f);
+
         return Optional.of(new TelemetrySampleSummary(
                 count,
                 new Corners(slipRatioFL / count, slipRatioFR / count, slipRatioRL / count, slipRatioRR / count),
                 new Corners(slipAngleFL / count, slipAngleFR / count, slipAngleRL / count, slipAngleRR / count),
                 new Corners(suspFL / count, suspFR / count, suspRL / count, suspRR / count),
                 avgTireTemp,
-                topSpeedMps));
+                topSpeedMps,
+                peakPowerHp));
     }
 
     public synchronized void reset() {
@@ -89,5 +96,6 @@ public final class TelemetrySampleAggregator {
         suspFL = suspFR = suspRL = suspRR = 0;
         tireTempFL = tireTempFR = tireTempRL = tireTempRR = 0;
         topSpeedMps = 0;
+        peakPowerWatts = 0;
     }
 }
