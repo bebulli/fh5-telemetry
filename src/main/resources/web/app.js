@@ -1,7 +1,20 @@
 const POLL_INTERVAL_MS = 300;
 
+const MPH_TO_KMH = 1.60934;
+const PSI_TO_BAR = 0.0689476;
+const KG_TO_LB = 2.20462;
+const LBIN_TO_NMM = 0.175127;
+const LBIN_TO_KGFMM = 0.0178580;
+
+let currentUnitSystem = localStorage.getItem("unitSystem") || "english";
+let lastTuningResult = null;
+
 function el(id) {
   return document.getElementById(id);
+}
+
+function isMetric() {
+  return currentUnitSystem === "metric";
 }
 
 async function postForm(path, fields) {
@@ -29,14 +42,73 @@ function setIfNotFocused(id, value) {
   }
 }
 
-function corner(id, corners, digits) {
+function corner(id, corners, digits, convert = (v) => v) {
   const node = el(id);
-  const fmt = (v) => Number(v).toFixed(digits);
+  const fmt = (v) => convert(v).toFixed(digits);
   node.children[0].textContent = `FL ${fmt(corners.frontLeft)}`;
   node.children[1].textContent = `FR ${fmt(corners.frontRight)}`;
   node.children[2].textContent = `RL ${fmt(corners.rearLeft)}`;
   node.children[3].textContent = `RR ${fmt(corners.rearRight)}`;
 }
+
+function formatSpeed(mph) {
+  return isMetric() ? `${(mph * MPH_TO_KMH).toFixed(0)} km/h` : `${mph.toFixed(0)} mph`;
+}
+
+function formatPressure(psi) {
+  return isMetric() ? `${(psi * PSI_TO_BAR).toFixed(2)} bar` : `${psi.toFixed(1)} psi`;
+}
+
+function formatSpring(lbPerIn) {
+  const unit = el("springUnit").value;
+  if (unit === "nmm") {
+    return `${(lbPerIn * LBIN_TO_NMM).toFixed(2)} N/mm`;
+  }
+  if (unit === "kgfmm") {
+    return `${(lbPerIn * LBIN_TO_KGFMM).toFixed(3)} kgf/mm`;
+  }
+  return `${lbPerIn.toFixed(2)} lbs/in`;
+}
+
+function convertGuidanceUnits(text) {
+  if (!isMetric()) {
+    return text;
+  }
+  return text.replace(/(\d+(\.\d+)?)\s*mph/g, (match, num) => `${Math.round(parseFloat(num) * MPH_TO_KMH)} km/h`);
+}
+
+function weightInKg() {
+  const value = parseFloat(el("weightKg").value);
+  return isMetric() ? value : value / KG_TO_LB;
+}
+
+function updateUnitLabels() {
+  el("weightUnitLabel").textContent = isMetric() ? "kg" : "lb";
+  el("tempUnitLabel").textContent = isMetric() ? "C" : "F";
+}
+
+el("unitSystem").addEventListener("change", () => {
+  const newSystem = el("unitSystem").value;
+  if (newSystem !== currentUnitSystem) {
+    const field = el("weightKg");
+    const current = parseFloat(field.value);
+    if (!isNaN(current)) {
+      field.value = Math.round(newSystem === "metric" ? current / KG_TO_LB : current * KG_TO_LB);
+    }
+    currentUnitSystem = newSystem;
+    localStorage.setItem("unitSystem", currentUnitSystem);
+  }
+  updateUnitLabels();
+  if (lastTuningResult) {
+    renderTuning(lastTuningResult);
+  }
+});
+
+el("springUnit").addEventListener("change", () => {
+  if (lastTuningResult) {
+    renderTuning(lastTuningResult);
+  }
+});
 
 async function refreshStatus() {
   const status = await getJson("/api/status");
@@ -54,7 +126,7 @@ async function refreshLatest() {
   if (!t) {
     return;
   }
-  el("speed").textContent = `${t.speedMph.toFixed(0)} mph`;
+  el("speed").textContent = formatSpeed(t.speedMph);
   el("rpm").textContent = `${t.currentEngineRpm.toFixed(0)} / ${t.engineMaxRpm.toFixed(0)}`;
   el("gear").textContent = t.gear !== undefined ? t.gear : "-";
   el("drivetrain").textContent = t.drivetrain;
@@ -67,7 +139,7 @@ async function refreshLatest() {
   corner("slipRatio", t.tireSlipRatio, 2);
   corner("suspTravel", t.suspensionTravelNormalized, 2);
   if (t.tireTempCelsius) {
-    corner("tireTemp", t.tireTempCelsius, 1);
+    corner("tireTemp", t.tireTempCelsius, 1, (c) => (isMetric() ? c : (c * 9) / 5 + 32));
   }
 
   if (t.carPerformanceIndex > 0) {
@@ -105,23 +177,26 @@ function showError(err) {
 }
 
 function renderTuning(result) {
+  lastTuningResult = result;
   const container = el("tuningResult");
-  const axleRow = (label, pair, unit) => `
+  const axleRow = (label, pair, format) => `
     <div class="axle-row">
       <span class="col-label">${label}</span>
-      <span>Front: ${pair.front.toFixed(2)}${unit}</span>
-      <span>Rear: ${pair.rear.toFixed(2)}${unit}</span>
+      <span>Front: ${format(pair.front)}</span>
+      <span>Rear: ${format(pair.rear)}</span>
     </div>`;
+  const degrees = (v) => `${v.toFixed(2)}&deg;`;
+  const plain = (v) => v.toFixed(2);
 
   container.innerHTML = `
-    ${axleRow("Tire pressure", result.tirePressurePsi, " psi")}
-    ${axleRow("Camber", result.camberDegrees, "&deg;")}
-    ${axleRow("Toe", result.toeDegrees, "&deg;")}
-    ${axleRow("Anti-roll bar", result.antiRollBarStiffness, "")}
-    ${axleRow("Spring rate", result.springRateLbsPerIn, " lbs/in")}
-    ${axleRow("Rebound damping", result.reboundDamping, "")}
-    ${axleRow("Bump damping", result.bumpDamping, "")}
-    <p><strong>Gearing:</strong> ${result.gearing.guidance}</p>
+    ${axleRow("Tire pressure", result.tirePressurePsi, formatPressure)}
+    ${axleRow("Camber", result.camberDegrees, degrees)}
+    ${axleRow("Toe", result.toeDegrees, degrees)}
+    ${axleRow("Anti-roll bar", result.antiRollBarStiffness, plain)}
+    ${axleRow("Spring rate", result.springRateLbsPerIn, formatSpring)}
+    ${axleRow("Rebound damping", result.reboundDamping, plain)}
+    ${axleRow("Bump damping", result.bumpDamping, plain)}
+    <p><strong>Gearing:</strong> ${convertGuidanceUnits(result.gearing.guidance)}</p>
     <ul>${result.notes.map((n) => `<li>${n}</li>`).join("")}</ul>
   `;
 }
@@ -154,7 +229,7 @@ function checkedSymptoms() {
 
 el("tuneBtn").onclick = () =>
   postForm("/api/tuning", {
-    weightKg: el("weightKg").value,
+    weightKg: weightInKg(),
     drivetrain: el("drivetrainInput").value,
     powerHp: el("powerHp").value,
     performanceIndex: el("performanceIndex").value,
@@ -172,5 +247,7 @@ setInterval(() => {
   refreshSummary().catch(() => {});
 }, POLL_INTERVAL_MS);
 
+el("unitSystem").value = currentUnitSystem;
+updateUnitLabels();
 refreshStatus().catch(() => {});
 refreshRecordings().catch(() => {});

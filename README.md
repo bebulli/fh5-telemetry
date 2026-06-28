@@ -34,7 +34,7 @@ The PS5 and PC need to be on the same local network. That's it, the game will st
 java -cp target/classes com.fh5.telemetry.Main
 ```
 
-This starts the UDP listener on port 6767 and a small web UI at `http://localhost:7070`. Open that in a browser to see live telemetry, start/stop recordings, replay a saved session, and get a tuning recommendation.
+This starts the UDP listener on port 6767 and a small web UI at `http://localhost:7070`. Open that in a browser to see live telemetry, start/stop recordings, replay a saved session, and get a tuning recommendation. There's a units toggle (English/Metric) for speed, tire temp and pressure, plus a separate spring rate unit picker (lb/in, N/mm, kgf/mm) since that's independent of the rest.
 
 Other modes, all run the same way with an argument after `Main`:
 

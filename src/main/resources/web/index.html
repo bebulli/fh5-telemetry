@@ -14,6 +14,21 @@
     <button id="startListenerBtn">Start listening</button>
     <span id="listenerStatus" class="status">not listening</span>
   </div>
+  <div class="row">
+    <label>Units
+      <select id="unitSystem">
+        <option value="english" selected>English (mph, psi, lb, F)</option>
+        <option value="metric">Metric (km/h, bar, kg, C)</option>
+      </select>
+    </label>
+    <label>Spring units
+      <select id="springUnit">
+        <option value="lbin" selected>lb/in</option>
+        <option value="nmm">N/mm</option>
+        <option value="kgfmm">kgf/mm</option>
+      </select>
+    </label>
+  </div>
 </header>
 
 <main>
@@ -31,7 +46,7 @@
     <h3>Tire slip ratio</h3>
     <div class="corners" id="slipRatio"><div>FL -</div><div>FR -</div><div>RL -</div><div>RR -</div></div>
 
-    <h3>Tire temp (C)</h3>
+    <h3>Tire temp (<span id="tempUnitLabel">F</span>)</h3>
     <div class="corners" id="tireTemp"><div>FL -</div><div>FR -</div><div>RL -</div><div>RR -</div></div>
 
     <h3>Suspension travel</h3>
@@ -54,7 +69,7 @@
   <section class="card" id="tuning-panel">
     <h2>Tuning recommendation</h2>
     <div class="row">
-      <label>Weight (kg), not in telemetry <input id="weightKg" type="number" value="1500"></label>
+      <label>Weight (<span id="weightUnitLabel">kg</span>), not in telemetry <input id="weightKg" type="number" value="1500"></label>
       <label>Drivetrain (auto-filled from telemetry)
         <select id="drivetrainInput">
           <option value="FWD">FWD</option>
