@@ -5,6 +5,7 @@ import com.fh5.telemetry.model.DrivetrainType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Turns a car spec and a driving sample into a starting tuning setup, using
@@ -60,22 +61,35 @@ public final class TuningHeuristicsEngine {
     private static final float DAMPER_REBOUND_FROM_SPRING_RATE = 0.035f;
     private static final float DAMPER_BUMP_TO_REBOUND_RATIO = 0.6f;
 
+    private static final float SYMPTOM_CAMBER_DELTA = 0.6f;
+    private static final float SYMPTOM_ARB_DELTA = 5f;
+    private static final float SYMPTOM_TRACTION_LOSS_REAR_PRESSURE_DELTA = -1.5f;
+    private static final float SYMPTOM_TRACTION_LOSS_REAR_ARB_DELTA = -4f;
+    private static final float SYMPTOM_TRACTION_LOSS_REAR_SPRING_MULTIPLIER = 0.93f;
+    private static final float SYMPTOM_BOUNCY_SPRING_MULTIPLIER = 1.2f;
+
     public TuningRecommendation recommend(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style) {
+        return recommend(spec, summary, style, Set.of());
+    }
+
+    public TuningRecommendation recommend(
+            CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms) {
         List<String> notes = new ArrayList<>();
 
-        AxlePair pressure = computeTirePressure(spec, summary, style, notes);
+        AxlePair pressure = computeTirePressure(spec, summary, style, symptoms, notes);
         GearingAdvice gearing = computeGearing(spec, summary, style, notes);
-        AxlePair camber = computeCamber(spec, summary, style, notes);
+        AxlePair camber = computeCamber(spec, summary, style, symptoms, notes);
         AxlePair toe = computeToe(style);
-        AxlePair arb = computeArbStiffness(spec, summary, style, notes);
-        AxlePair springRate = computeSpringRate(spec, summary, style, notes);
+        AxlePair arb = computeArbStiffness(spec, summary, style, symptoms, notes);
+        AxlePair springRate = computeSpringRate(spec, summary, style, symptoms, notes);
         AxlePair rebound = computeDamper(springRate, DAMPER_REBOUND_FROM_SPRING_RATE);
         AxlePair bump = computeDamper(rebound, DAMPER_BUMP_TO_REBOUND_RATIO);
 
         return new TuningRecommendation(style, pressure, gearing, camber, toe, arb, springRate, rebound, bump, notes);
     }
 
-    private AxlePair computeTirePressure(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, List<String> notes) {
+    private AxlePair computeTirePressure(
+            CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
         float base = lerpByPerformanceIndex(spec.performanceIndex(), STREET_PRESSURE_PSI, RACE_PRESSURE_PSI);
 
         float front = base;
@@ -94,6 +108,11 @@ public final class TuningHeuristicsEngine {
             front += DRIFT_FRONT_PRESSURE_DELTA;
             rear += DRIFT_REAR_PRESSURE_DELTA;
             notes.add("Drift setup: lower front pressure for turn-in bite, higher rear pressure to reduce rear grip and make the slide easier to hold.");
+        }
+
+        if (symptoms.contains(DrivingSymptom.TRACTION_LOSS)) {
+            rear += SYMPTOM_TRACTION_LOSS_REAR_PRESSURE_DELTA;
+            notes.add("Reported traction loss: lowered rear pressure to grow the rear contact patch.");
         }
 
         return new AxlePair(clamp(front, MIN_PRESSURE_PSI, MAX_PRESSURE_PSI), clamp(rear, MIN_PRESSURE_PSI, MAX_PRESSURE_PSI));
@@ -129,7 +148,8 @@ public final class TuningHeuristicsEngine {
         return new GearingAdvice(guidance, lean);
     }
 
-    private AxlePair computeCamber(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, List<String> notes) {
+    private AxlePair computeCamber(
+            CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
         float front = lerpByPerformanceIndex(spec.performanceIndex(), STREET_FRONT_CAMBER, RACE_FRONT_CAMBER);
         float rear = lerpByPerformanceIndex(spec.performanceIndex(), STREET_REAR_CAMBER, RACE_REAR_CAMBER);
 
@@ -149,6 +169,15 @@ public final class TuningHeuristicsEngine {
             notes.add("Drift setup: extra front camber keeps front bite while sideways; rear camber pulled back so the rear breaks loose predictably.");
         }
 
+        if (symptoms.contains(DrivingSymptom.UNDERSTEER)) {
+            front -= SYMPTOM_CAMBER_DELTA;
+            notes.add("Reported understeer: added front camber for more front lateral grip.");
+        }
+        if (symptoms.contains(DrivingSymptom.OVERSTEER)) {
+            rear -= SYMPTOM_CAMBER_DELTA;
+            notes.add("Reported oversteer: added rear camber for more rear lateral grip.");
+        }
+
         return new AxlePair(front, Math.min(rear, -0.1f));
     }
 
@@ -162,7 +191,8 @@ public final class TuningHeuristicsEngine {
         return new AxlePair(front, rear);
     }
 
-    private AxlePair computeArbStiffness(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, List<String> notes) {
+    private AxlePair computeArbStiffness(
+            CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
         float tonnes = spec.weightKg() / 1000f;
         float overallStiffness = ARB_BASE_PER_TONNE * tonnes
                 + ARB_PI_GAIN_PER_TONNE * tonnes * (spec.performanceIndex() / 999f);
@@ -182,6 +212,21 @@ public final class TuningHeuristicsEngine {
             notes.add("Drift setup: stiffened rear bar and softened front bar to shift mechanical grip toward the front axle.");
         }
 
+        if (symptoms.contains(DrivingSymptom.UNDERSTEER)) {
+            front -= SYMPTOM_ARB_DELTA;
+            rear += SYMPTOM_ARB_DELTA;
+            notes.add("Reported understeer: softened front bar and stiffened rear bar to rotate the car more.");
+        }
+        if (symptoms.contains(DrivingSymptom.OVERSTEER)) {
+            front += SYMPTOM_ARB_DELTA;
+            rear -= SYMPTOM_ARB_DELTA;
+            notes.add("Reported oversteer: stiffened front bar and softened rear bar for more stability.");
+        }
+        if (symptoms.contains(DrivingSymptom.TRACTION_LOSS)) {
+            rear += SYMPTOM_TRACTION_LOSS_REAR_ARB_DELTA;
+            notes.add("Reported traction loss: softened rear bar so both rear tires keep more even contact with the road.");
+        }
+
         return new AxlePair(clamp(front, ARB_MIN, ARB_MAX), clamp(rear, ARB_MIN, ARB_MAX));
     }
 
@@ -193,7 +238,8 @@ public final class TuningHeuristicsEngine {
         };
     }
 
-    private AxlePair computeSpringRate(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, List<String> notes) {
+    private AxlePair computeSpringRate(
+            CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
         float ratePerTonne = lerpByPerformanceIndex(spec.performanceIndex(), SPRING_RATE_PER_TONNE_STREET, SPRING_RATE_PER_TONNE_RACE);
         float frontTonnes = spec.weightKg() / 1000f * (spec.frontWeightDistributionPct() / 100f);
         float rearTonnes = spec.weightKg() / 1000f * (1 - spec.frontWeightDistributionPct() / 100f);
@@ -214,6 +260,16 @@ public final class TuningHeuristicsEngine {
         if (style == TuningStyle.DRIFT) {
             front *= DRIFT_FRONT_SPRING_MULTIPLIER;
             rear *= DRIFT_REAR_SPRING_MULTIPLIER;
+        }
+
+        if (symptoms.contains(DrivingSymptom.TRACTION_LOSS)) {
+            rear *= SYMPTOM_TRACTION_LOSS_REAR_SPRING_MULTIPLIER;
+            notes.add("Reported traction loss: softened rear springs to keep a more consistent contact patch under power.");
+        }
+        if (symptoms.contains(DrivingSymptom.BOUNCY_SUSPENSION)) {
+            front *= SYMPTOM_BOUNCY_SPRING_MULTIPLIER;
+            rear *= SYMPTOM_BOUNCY_SPRING_MULTIPLIER;
+            notes.add("Reported bouncy/bottoming-out suspension: stiffened springs on both axles.");
         }
 
         return new AxlePair(front, rear);

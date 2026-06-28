@@ -126,6 +126,12 @@ el("stopRecordingBtn").onclick = () =>
 
 el("resetSampleBtn").onclick = () => postForm("/api/telemetry/reset", {}).catch(showError);
 
+function checkedSymptoms() {
+  return Array.from(document.querySelectorAll(".symptom:checked"))
+    .map((el) => el.value)
+    .join(",");
+}
+
 el("tuneBtn").onclick = () =>
   postForm("/api/tuning", {
     weightKg: el("weightKg").value,
@@ -133,6 +139,7 @@ el("tuneBtn").onclick = () =>
     powerHp: el("powerHp").value,
     performanceIndex: el("performanceIndex").value,
     style: el("styleInput").value,
+    symptoms: checkedSymptoms(),
   })
     .then(renderTuning)
     .catch((err) => {

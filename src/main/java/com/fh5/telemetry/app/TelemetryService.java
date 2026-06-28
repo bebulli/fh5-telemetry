@@ -7,6 +7,7 @@ import com.fh5.telemetry.recording.RecordedFrame;
 import com.fh5.telemetry.recording.SessionReader;
 import com.fh5.telemetry.recording.SessionRecorder;
 import com.fh5.telemetry.tuning.CarSpec;
+import com.fh5.telemetry.tuning.DrivingSymptom;
 import com.fh5.telemetry.tuning.TelemetrySampleAggregator;
 import com.fh5.telemetry.tuning.TelemetrySampleSummary;
 import com.fh5.telemetry.tuning.TuningHeuristicsEngine;
@@ -20,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -168,8 +170,8 @@ public final class TelemetryService {
         }
     }
 
-    public Optional<TuningRecommendation> computeTuning(CarSpec spec, TuningStyle style) {
-        return aggregator.summarize().map(summary -> tuningEngine.recommend(spec, summary, style));
+    public Optional<TuningRecommendation> computeTuning(CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms) {
+        return aggregator.summarize().map(summary -> tuningEngine.recommend(spec, summary, style, symptoms));
     }
 
     private void onPacket(byte[] data, int length, String senderAddress) {

@@ -7,6 +7,7 @@ import com.fh5.telemetry.sample.SamplePacketBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -96,6 +97,42 @@ class TuningHeuristicsEngineTest {
 
         assertTrue(result.antiRollBarStiffness().front() >= 1f && result.antiRollBarStiffness().front() <= 65f);
         assertTrue(result.antiRollBarStiffness().rear() >= 1f && result.antiRollBarStiffness().rear() <= 65f);
+    }
+
+    @Test
+    void reportedUndersteerAddsFrontCamberBeyondTelemetryAlone() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.AWD, 550f, 800);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
+        TuningRecommendation withUndersteer = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.UNDERSTEER));
+
+        assertTrue(withUndersteer.camberDegrees().front() < withoutSymptom.camberDegrees().front());
+        assertTrue(withUndersteer.antiRollBarStiffness().front() < withoutSymptom.antiRollBarStiffness().front());
+    }
+
+    @Test
+    void reportedTractionLossSoftensRearEnd() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.RWD, 550f, 800);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
+        TuningRecommendation withTractionLoss = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.TRACTION_LOSS));
+
+        assertTrue(withTractionLoss.tirePressurePsi().rear() < withoutSymptom.tirePressurePsi().rear());
+        assertTrue(withTractionLoss.springRateLbsPerIn().rear() < withoutSymptom.springRateLbsPerIn().rear());
+    }
+
+    @Test
+    void reportedBouncySuspensionStiffensBothAxles() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.AWD, 550f, 800);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
+        TuningRecommendation withBounce = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.BOUNCY_SUSPENSION));
+
+        assertTrue(withBounce.springRateLbsPerIn().front() > withoutSymptom.springRateLbsPerIn().front());
+        assertTrue(withBounce.springRateLbsPerIn().rear() > withoutSymptom.springRateLbsPerIn().rear());
     }
 
     @Test

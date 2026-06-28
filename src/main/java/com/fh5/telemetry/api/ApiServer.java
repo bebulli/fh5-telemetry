@@ -5,6 +5,7 @@ import com.fh5.telemetry.app.TelemetryService;
 import com.fh5.telemetry.model.DrivetrainType;
 import com.fh5.telemetry.model.TelemetryPacket;
 import com.fh5.telemetry.tuning.CarSpec;
+import com.fh5.telemetry.tuning.DrivingSymptom;
 import com.fh5.telemetry.tuning.TuningRecommendation;
 import com.fh5.telemetry.tuning.TuningStyle;
 import com.sun.net.httpserver.HttpExchange;
@@ -17,8 +18,10 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Executors;
 
 /**
@@ -160,8 +163,9 @@ public final class ApiServer {
                     params.requireInt("performanceIndex"),
                     Float.parseFloat(params.get("frontWeightDistributionPct", "50")));
             TuningStyle style = TuningStyle.valueOf(params.get("style", "GRIP").toUpperCase());
+            Set<DrivingSymptom> symptoms = parseSymptoms(params.get("symptoms", ""));
 
-            Optional<TuningRecommendation> recommendation = service.computeTuning(spec, style);
+            Optional<TuningRecommendation> recommendation = service.computeTuning(spec, style, symptoms);
             if (recommendation.isEmpty()) {
                 sendJson(exchange, 400, error("No driving samples yet. Drive for a few seconds first."));
                 return;
@@ -170,6 +174,19 @@ public final class ApiServer {
         } catch (Exception e) {
             sendJson(exchange, 400, error(e.getMessage()));
         }
+    }
+
+    private static Set<DrivingSymptom> parseSymptoms(String csv) {
+        if (csv.isBlank()) {
+            return Set.of();
+        }
+        Set<DrivingSymptom> symptoms = new LinkedHashSet<>();
+        for (String token : csv.split(",")) {
+            if (!token.isBlank()) {
+                symptoms.add(DrivingSymptom.valueOf(token.trim().toUpperCase()));
+            }
+        }
+        return symptoms;
     }
 
     private static Map<String, Object> error(String message) {

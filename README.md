@@ -68,6 +68,8 @@ Forza doesn't expose a car's weight, power, drivetrain or gear ratios over telem
 
 Choosing **Drift** instead of **Grip** doesn't rerun different math from scratch, it applies a second pass of adjustments on top: less rear pressure and camber (looser rear end), more front bite, a stiffer rear bar, and shorter gearing to hold the car in its torque band mid-slide.
 
+The web UI also has a checklist (understeer, oversteer, traction loss, bouncy/bottoming-out suspension) so you can tell it directly what the car is doing instead of waiting for the telemetry averages to pick it up. Checking one applies its own corrective nudge on top of whatever the telemetry already suggested, and shows up as a separate note in the result so you can see which adjustments came from your input versus the data.
+
 This is a starting point for further adjustment on track, not a physics solver, Forza doesn't publish the internal formulas it uses for its own tuning screen.
 
 ## Tests
