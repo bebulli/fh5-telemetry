@@ -14,9 +14,11 @@ import java.util.Set;
  * using whatever the tires and suspension are actually reporting.
  *
  * These are starting points for further fine-tuning on track, not a
- * physics solver. Forza doesn't expose its internal tuning math, so the
- * scales used here (ARB 1-65, dampers ~1-30) match the ranges the in-game
- * sliders use, not derived physical units.
+ * physics solver. Forza doesn't expose its internal tuning math, so most
+ * of the scales used here (ARB 1-65, dampers ~1-30, aero as a 0-100 level)
+ * match the ranges the in-game sliders use, not derived physical units.
+ * Spring rate is the exception: its N/mm range (528.3 to 2641.3 for a
+ * race-modified car) is a real reported in-game bound, not a guess.
  */
 public final class TuningHeuristicsEngine {
 
@@ -43,6 +45,40 @@ public final class TuningHeuristicsEngine {
     private static final float DRIFT_FRONT_TOE_DELTA = -0.3f;
     private static final float DRIFT_REAR_TOE_DELTA = -0.15f;
 
+    private static final float STREET_CASTER_DEGREES = 3.0f;
+    private static final float RACE_CASTER_DEGREES = 6.5f;
+    private static final float MIN_CASTER_DEGREES = 1.0f;
+    private static final float MAX_CASTER_DEGREES = 7.0f;
+    private static final float SYMPTOM_UNDERSTEER_CASTER_DELTA = 0.5f;
+
+    private static final float STREET_RIDE_HEIGHT_MM = 150f;
+    private static final float RACE_RIDE_HEIGHT_MM = 110f;
+    private static final float RACE_RIDE_HEIGHT_RAKE_MM = 5f;
+    private static final float MIN_RIDE_HEIGHT_MM = 80f;
+    private static final float MAX_RIDE_HEIGHT_MM = 200f;
+    private static final float BOTTOMING_RIDE_HEIGHT_RAISE_MM = 6f;
+
+    private static final float STREET_AERO_LEVEL = 15f;
+    private static final float RACE_AERO_LEVEL = 70f;
+    private static final float AERO_FRONT_TO_REAR_RATIO = 0.8f;
+    private static final float MIN_AERO_LEVEL = 0f;
+    private static final float MAX_AERO_LEVEL = 100f;
+    private static final float DRIFT_AERO_MULTIPLIER = 0.3f;
+
+    private static final float BASE_BRAKE_BALANCE_FRONT_PCT = 52f;
+    private static final float MIN_BRAKE_BALANCE_FRONT_PCT = 25f;
+    private static final float MAX_BRAKE_BALANCE_FRONT_PCT = 75f;
+    private static final float STREET_BRAKE_PRESSURE_PCT = 100f;
+    private static final float RACE_BRAKE_PRESSURE_PCT = 150f;
+    private static final float MIN_BRAKE_PRESSURE_PCT = 50f;
+    private static final float MAX_BRAKE_PRESSURE_PCT = 200f;
+
+    private static final float MIN_DIFF_LOCK_PCT = 0f;
+    private static final float MAX_DIFF_LOCK_PCT = 100f;
+    private static final float DRIFT_ACCEL_LOCK_DELTA = 20f;
+    private static final float DRIFT_DECEL_LOCK_DELTA = 15f;
+    private static final float SYMPTOM_TRACTION_LOSS_ACCEL_LOCK_DELTA = 10f;
+
     private static final float ARB_MIN = 1f;
     private static final float ARB_MAX = 65f;
     private static final float ARB_BASE_PER_TONNE = 18f;
@@ -51,14 +87,17 @@ public final class TuningHeuristicsEngine {
     private static final float DRIFT_FRONT_ARB_DELTA = -6f;
     private static final float DRIFT_REAR_ARB_DELTA = 8f;
 
-    private static final float SPRING_RATE_PER_TONNE_STREET = 550f;
-    private static final float SPRING_RATE_PER_TONNE_RACE = 900f;
+    // Real in-game bounds for a race-modified car's spring rate slider.
+    private static final float SPRING_RATE_MIN_NMM = 528.3f;
+    private static final float SPRING_RATE_MAX_NMM = 2641.3f;
+    private static final float SPRING_RATE_PER_TONNE_STREET_NMM = 650f;
+    private static final float SPRING_RATE_PER_TONNE_RACE_NMM = 1450f;
     private static final float SUSPENSION_BOTTOMING_THRESHOLD = 0.85f;
     private static final float BOTTOMING_SPRING_RATE_BOOST = 1.15f;
     private static final float DRIFT_FRONT_SPRING_MULTIPLIER = 1.05f;
     private static final float DRIFT_REAR_SPRING_MULTIPLIER = 0.9f;
 
-    private static final float DAMPER_REBOUND_FROM_SPRING_RATE = 0.035f;
+    private static final float DAMPER_REBOUND_FROM_SPRING_RATE = 0.015f;
     private static final float DAMPER_BUMP_TO_REBOUND_RATIO = 0.6f;
 
     private static final float SYMPTOM_CAMBER_DELTA = 0.6f;
@@ -80,12 +119,22 @@ public final class TuningHeuristicsEngine {
         GearingAdvice gearing = computeGearing(spec, summary, style, notes);
         AxlePair camber = computeCamber(spec, summary, style, symptoms, notes);
         AxlePair toe = computeToe(style);
+        float caster = computeCaster(spec, symptoms);
+        AxlePair rideHeight = computeRideHeight(spec, summary, style, notes);
+        AxlePair aero = computeAero(spec, style);
+        float brakeBalance = computeBrakeBalance(spec);
+        float brakePressure = computeBrakePressure(spec);
+        float accelLock = computeAccelDiffLock(spec, style, symptoms, notes);
+        float decelLock = computeDecelDiffLock(spec, style);
         AxlePair arb = computeArbStiffness(spec, summary, style, symptoms, notes);
         AxlePair springRate = computeSpringRate(spec, summary, style, symptoms, notes);
         AxlePair rebound = computeDamper(springRate, DAMPER_REBOUND_FROM_SPRING_RATE);
         AxlePair bump = computeDamper(rebound, DAMPER_BUMP_TO_REBOUND_RATIO);
 
-        return new TuningRecommendation(style, pressure, gearing, camber, toe, arb, springRate, rebound, bump, notes);
+        return new TuningRecommendation(
+                style, pressure, gearing, camber, toe, caster, rideHeight, aero,
+                brakeBalance, brakePressure, accelLock, decelLock,
+                arb, springRate, rebound, bump, notes);
     }
 
     private AxlePair computeTirePressure(
@@ -191,6 +240,96 @@ public final class TuningHeuristicsEngine {
         return new AxlePair(front, rear);
     }
 
+    private float computeCaster(CarSpec spec, Set<DrivingSymptom> symptoms) {
+        float caster = lerpByPerformanceIndex(spec.performanceIndex(), STREET_CASTER_DEGREES, RACE_CASTER_DEGREES);
+        if (symptoms.contains(DrivingSymptom.UNDERSTEER)) {
+            // More caster increases camber gain while turning, adding front grip mid-corner.
+            caster += SYMPTOM_UNDERSTEER_CASTER_DELTA;
+        }
+        return clamp(caster, MIN_CASTER_DEGREES, MAX_CASTER_DEGREES);
+    }
+
+    private AxlePair computeRideHeight(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, List<String> notes) {
+        float base = lerpByPerformanceIndex(spec.performanceIndex(), STREET_RIDE_HEIGHT_MM, RACE_RIDE_HEIGHT_MM);
+        float front = base;
+        float rear = base;
+
+        if (style != TuningStyle.DRIFT) {
+            // Slight rake (front lower than rear) helps front grip and airflow to the rear.
+            front -= RACE_RIDE_HEIGHT_RAKE_MM;
+        }
+
+        Corners travel = summary.avgSuspensionTravelNormalized();
+        if (travel.frontAverage() > SUSPENSION_BOTTOMING_THRESHOLD) {
+            front += BOTTOMING_RIDE_HEIGHT_RAISE_MM;
+            notes.add("Front suspension travel is near its limit; raised front ride height a bit as well as stiffening the spring.");
+        }
+        if (travel.rearAverage() > SUSPENSION_BOTTOMING_THRESHOLD) {
+            rear += BOTTOMING_RIDE_HEIGHT_RAISE_MM;
+            notes.add("Rear suspension travel is near its limit; raised rear ride height a bit as well as stiffening the spring.");
+        }
+
+        return new AxlePair(clamp(front, MIN_RIDE_HEIGHT_MM, MAX_RIDE_HEIGHT_MM), clamp(rear, MIN_RIDE_HEIGHT_MM, MAX_RIDE_HEIGHT_MM));
+    }
+
+    private AxlePair computeAero(CarSpec spec, TuningStyle style) {
+        float overall = lerpByPerformanceIndex(spec.performanceIndex(), STREET_AERO_LEVEL, RACE_AERO_LEVEL);
+        float front = overall * AERO_FRONT_TO_REAR_RATIO;
+        float rear = overall;
+
+        if (style == TuningStyle.DRIFT) {
+            // Less aero, especially at the rear, keeps the car rotatable instead of planted.
+            front *= DRIFT_AERO_MULTIPLIER;
+            rear *= DRIFT_AERO_MULTIPLIER;
+        }
+
+        return new AxlePair(clamp(front, MIN_AERO_LEVEL, MAX_AERO_LEVEL), clamp(rear, MIN_AERO_LEVEL, MAX_AERO_LEVEL));
+    }
+
+    private float computeBrakeBalance(CarSpec spec) {
+        float balance = BASE_BRAKE_BALANCE_FRONT_PCT;
+        // Cars with more weight over the front axle need more front brake bias to match the load.
+        balance += (spec.frontWeightDistributionPct() - 50f) * 0.3f;
+        return clamp(balance, MIN_BRAKE_BALANCE_FRONT_PCT, MAX_BRAKE_BALANCE_FRONT_PCT);
+    }
+
+    private float computeBrakePressure(CarSpec spec) {
+        float pressure = lerpByPerformanceIndex(spec.performanceIndex(), STREET_BRAKE_PRESSURE_PCT, RACE_BRAKE_PRESSURE_PCT);
+        return clamp(pressure, MIN_BRAKE_PRESSURE_PCT, MAX_BRAKE_PRESSURE_PCT);
+    }
+
+    private float computeAccelDiffLock(CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
+        float lock = switch (spec.drivetrain()) {
+            case FWD -> 15f;
+            case RWD -> 25f;
+            case AWD, UNKNOWN -> 30f;
+        };
+
+        if (style == TuningStyle.DRIFT) {
+            lock += DRIFT_ACCEL_LOCK_DELTA;
+        }
+        if (symptoms.contains(DrivingSymptom.TRACTION_LOSS)) {
+            lock += SYMPTOM_TRACTION_LOSS_ACCEL_LOCK_DELTA;
+            notes.add("Reported traction loss: increased acceleration differential lock so power gets split more evenly across the axle.");
+        }
+
+        return clamp(lock, MIN_DIFF_LOCK_PCT, MAX_DIFF_LOCK_PCT);
+    }
+
+    private float computeDecelDiffLock(CarSpec spec, TuningStyle style) {
+        float lock = switch (spec.drivetrain()) {
+            case FWD -> 5f;
+            case RWD -> 10f;
+            case AWD, UNKNOWN -> 12f;
+        };
+
+        if (style == TuningStyle.DRIFT) {
+            lock += DRIFT_DECEL_LOCK_DELTA;
+        }
+
+        return clamp(lock, MIN_DIFF_LOCK_PCT, MAX_DIFF_LOCK_PCT);
+    }
+
     private AxlePair computeArbStiffness(
             CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
         float tonnes = spec.weightKg() / 1000f;
@@ -240,7 +379,7 @@ public final class TuningHeuristicsEngine {
 
     private AxlePair computeSpringRate(
             CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
-        float ratePerTonne = lerpByPerformanceIndex(spec.performanceIndex(), SPRING_RATE_PER_TONNE_STREET, SPRING_RATE_PER_TONNE_RACE);
+        float ratePerTonne = lerpByPerformanceIndex(spec.performanceIndex(), SPRING_RATE_PER_TONNE_STREET_NMM, SPRING_RATE_PER_TONNE_RACE_NMM);
         float frontTonnes = spec.weightKg() / 1000f * (spec.frontWeightDistributionPct() / 100f);
         float rearTonnes = spec.weightKg() / 1000f * (1 - spec.frontWeightDistributionPct() / 100f);
 
@@ -272,7 +411,9 @@ public final class TuningHeuristicsEngine {
             notes.add("Reported bouncy/bottoming-out suspension: stiffened springs on both axles.");
         }
 
-        return new AxlePair(front, rear);
+        return new AxlePair(
+                clamp(front, SPRING_RATE_MIN_NMM, SPRING_RATE_MAX_NMM),
+                clamp(rear, SPRING_RATE_MIN_NMM, SPRING_RATE_MAX_NMM));
     }
 
     private AxlePair computeDamper(AxlePair reference, float factor) {

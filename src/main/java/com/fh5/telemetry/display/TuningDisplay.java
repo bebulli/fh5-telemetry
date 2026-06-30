@@ -10,8 +10,15 @@ public final class TuningDisplay {
         printAxle("Tire pressure (psi)", r.tirePressurePsi());
         printAxle("Camber (deg)", r.camberDegrees());
         printAxle("Toe (deg)", r.toeDegrees());
+        System.out.printf("  %-22s %7.2f%n", "Front caster (deg)", r.frontCasterDegrees());
+        printAxle("Ride height (mm)", r.rideHeightMm());
+        printAxle("Aero level", r.aeroLevel());
+        System.out.printf("  %-22s %7.2f%n", "Brake balance (%F)", r.brakeBalanceFrontPct());
+        System.out.printf("  %-22s %7.2f%n", "Brake pressure (%)", r.brakePressurePct());
+        System.out.printf("  %-22s %7.2f%n", "Diff accel lock (%)", r.diffAccelLockPct());
+        System.out.printf("  %-22s %7.2f%n", "Diff decel lock (%)", r.diffDecelLockPct());
         printAxle("Anti-roll bar", r.antiRollBarStiffness());
-        printAxle("Spring rate (lbs/in)", r.springRateLbsPerIn());
+        printAxle("Spring rate (N/mm)", r.springRateNmm());
         printAxle("Rebound damping", r.reboundDamping());
         printAxle("Bump damping", r.bumpDamping());
         System.out.printf("  %-22s %s%n", "Gearing", r.gearing().guidance());

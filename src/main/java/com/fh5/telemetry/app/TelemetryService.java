@@ -45,6 +45,7 @@ public final class TelemetryService {
     private volatile SessionRecorder activeRecorder;
     private volatile String activeRecordingFile;
     private volatile Thread replayThread;
+    private volatile int lastKnownPerformanceIndex;
 
     public TelemetryService(Path recordingsDir) throws IOException {
         Files.createDirectories(recordingsDir);
@@ -179,6 +180,17 @@ public final class TelemetryService {
             TelemetryPacket packet = parser.parse(data, length);
             latestPacket = packet;
             packetsReceived.incrementAndGet();
+
+            int performanceIndex = packet.carPerformanceIndex();
+            if (performanceIndex > 0) {
+                if (lastKnownPerformanceIndex > 0 && performanceIndex != lastKnownPerformanceIndex) {
+                    // A different PI means a different car (swap or upgrade), the sample
+                    // window (including peak power) no longer describes what's being driven now.
+                    aggregator.reset();
+                }
+                lastKnownPerformanceIndex = performanceIndex;
+            }
+
             aggregator.add(packet);
 
             SessionRecorder recorder = activeRecorder;

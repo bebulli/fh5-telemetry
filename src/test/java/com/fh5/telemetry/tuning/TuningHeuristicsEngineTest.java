@@ -87,7 +87,7 @@ class TuningHeuristicsEngineTest {
         TuningRecommendation lightResult = engine.recommend(light, summary, TuningStyle.GRIP);
         TuningRecommendation heavyResult = engine.recommend(heavy, summary, TuningStyle.GRIP);
 
-        assertTrue(heavyResult.springRateLbsPerIn().front() > lightResult.springRateLbsPerIn().front());
+        assertTrue(heavyResult.springRateNmm().front() > lightResult.springRateNmm().front());
     }
 
     @Test
@@ -120,7 +120,7 @@ class TuningHeuristicsEngineTest {
         TuningRecommendation withTractionLoss = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.TRACTION_LOSS));
 
         assertTrue(withTractionLoss.tirePressurePsi().rear() < withoutSymptom.tirePressurePsi().rear());
-        assertTrue(withTractionLoss.springRateLbsPerIn().rear() < withoutSymptom.springRateLbsPerIn().rear());
+        assertTrue(withTractionLoss.springRateNmm().rear() < withoutSymptom.springRateNmm().rear());
     }
 
     @Test
@@ -131,8 +131,50 @@ class TuningHeuristicsEngineTest {
         TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
         TuningRecommendation withBounce = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.BOUNCY_SUSPENSION));
 
-        assertTrue(withBounce.springRateLbsPerIn().front() > withoutSymptom.springRateLbsPerIn().front());
-        assertTrue(withBounce.springRateLbsPerIn().rear() > withoutSymptom.springRateLbsPerIn().rear());
+        assertTrue(withBounce.springRateNmm().front() > withoutSymptom.springRateNmm().front());
+        assertTrue(withBounce.springRateNmm().rear() > withoutSymptom.springRateNmm().rear());
+    }
+
+    @Test
+    void springRateStaysWithinRealGameBounds() {
+        CarSpec light = new CarSpec(900f, DrivetrainType.FWD, 200f, 200);
+        CarSpec heavy = new CarSpec(2400f, DrivetrainType.AWD, 1200f, 999);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation lightResult = engine.recommend(light, summary, TuningStyle.GRIP);
+        TuningRecommendation heavyResult = engine.recommend(heavy, summary, TuningStyle.DRIFT);
+
+        for (TuningRecommendation result : new TuningRecommendation[]{lightResult, heavyResult}) {
+            assertTrue(result.springRateNmm().front() >= 528.3f && result.springRateNmm().front() <= 2641.3f);
+            assertTrue(result.springRateNmm().rear() >= 528.3f && result.springRateNmm().rear() <= 2641.3f);
+        }
+    }
+
+    @Test
+    void newTuningFieldsStayWithinPlausibleRanges() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.RWD, 550f, 800);
+        TuningRecommendation result = engine.recommend(spec, summaryWithTireTemps(85f, 82f), TuningStyle.GRIP);
+
+        assertTrue(result.frontCasterDegrees() >= 1f && result.frontCasterDegrees() <= 7f);
+        assertTrue(result.rideHeightMm().front() >= 80f && result.rideHeightMm().front() <= 200f);
+        assertTrue(result.aeroLevel().front() >= 0f && result.aeroLevel().front() <= 100f);
+        assertTrue(result.brakeBalanceFrontPct() >= 25f && result.brakeBalanceFrontPct() <= 75f);
+        assertTrue(result.brakePressurePct() >= 50f && result.brakePressurePct() <= 200f);
+        assertTrue(result.diffAccelLockPct() >= 0f && result.diffAccelLockPct() <= 100f);
+        assertTrue(result.diffDecelLockPct() >= 0f && result.diffDecelLockPct() <= 100f);
+    }
+
+    @Test
+    void driftReducesAeroAndIncreasesDiffLockRelativeToGrip() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.RWD, 550f, 800);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation grip = engine.recommend(spec, summary, TuningStyle.GRIP);
+        TuningRecommendation drift = engine.recommend(spec, summary, TuningStyle.DRIFT);
+
+        assertTrue(drift.aeroLevel().rear() < grip.aeroLevel().rear());
+        assertTrue(drift.diffAccelLockPct() > grip.diffAccelLockPct());
+        assertTrue(drift.diffDecelLockPct() > grip.diffDecelLockPct());
     }
 
     @Test

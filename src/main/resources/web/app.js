@@ -3,8 +3,9 @@ const POLL_INTERVAL_MS = 300;
 const MPH_TO_KMH = 1.60934;
 const PSI_TO_BAR = 0.0689476;
 const KG_TO_LB = 2.20462;
-const LBIN_TO_NMM = 0.175127;
-const LBIN_TO_KGFMM = 0.0178580;
+const NMM_TO_LBIN = 5.71015;
+const NMM_TO_KGFMM = 0.101972;
+const MM_TO_IN = 0.0393701;
 
 let currentUnitSystem = localStorage.getItem("unitSystem") || "english";
 let lastTuningResult = null;
@@ -59,15 +60,19 @@ function formatPressure(psi) {
   return isMetric() ? `${(psi * PSI_TO_BAR).toFixed(2)} bar` : `${psi.toFixed(1)} psi`;
 }
 
-function formatSpring(lbPerIn) {
+function formatSpring(nMm) {
   const unit = el("springUnit").value;
-  if (unit === "nmm") {
-    return `${(lbPerIn * LBIN_TO_NMM).toFixed(2)} N/mm`;
+  if (unit === "lbin") {
+    return `${(nMm * NMM_TO_LBIN).toFixed(2)} lbs/in`;
   }
   if (unit === "kgfmm") {
-    return `${(lbPerIn * LBIN_TO_KGFMM).toFixed(3)} kgf/mm`;
+    return `${(nMm * NMM_TO_KGFMM).toFixed(3)} kgf/mm`;
   }
-  return `${lbPerIn.toFixed(2)} lbs/in`;
+  return `${nMm.toFixed(2)} N/mm`;
+}
+
+function formatRideHeight(mm) {
+  return isMetric() ? `${(mm / 10).toFixed(1)} cm` : `${(mm * MM_TO_IN).toFixed(2)} in`;
 }
 
 function convertGuidanceUnits(text) {
@@ -187,13 +192,26 @@ function renderTuning(result) {
     </div>`;
   const degrees = (v) => `${v.toFixed(2)}&deg;`;
   const plain = (v) => v.toFixed(2);
+  const pct = (v) => `${v.toFixed(1)}%`;
+  const singleRow = (label, value, format) => `
+    <div class="axle-row">
+      <span class="col-label">${label}</span>
+      <span>${format(value)}</span>
+    </div>`;
 
   container.innerHTML = `
     ${axleRow("Tire pressure", result.tirePressurePsi, formatPressure)}
     ${axleRow("Camber", result.camberDegrees, degrees)}
     ${axleRow("Toe", result.toeDegrees, degrees)}
+    ${singleRow("Front caster", result.frontCasterDegrees, degrees)}
+    ${axleRow("Ride height", result.rideHeightMm, formatRideHeight)}
+    ${axleRow("Aero level", result.aeroLevel, plain)}
+    ${singleRow("Brake balance (front)", result.brakeBalanceFrontPct, pct)}
+    ${singleRow("Brake pressure", result.brakePressurePct, pct)}
+    ${singleRow("Diff lock, accel", result.diffAccelLockPct, pct)}
+    ${singleRow("Diff lock, decel", result.diffDecelLockPct, pct)}
     ${axleRow("Anti-roll bar", result.antiRollBarStiffness, plain)}
-    ${axleRow("Spring rate", result.springRateLbsPerIn, formatSpring)}
+    ${axleRow("Spring rate", result.springRateNmm, formatSpring)}
     ${axleRow("Rebound damping", result.reboundDamping, plain)}
     ${axleRow("Bump damping", result.bumpDamping, plain)}
     <p><strong>Gearing:</strong> ${convertGuidanceUnits(result.gearing.guidance)}</p>

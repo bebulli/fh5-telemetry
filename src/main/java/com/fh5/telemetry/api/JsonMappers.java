@@ -89,8 +89,15 @@ final class JsonMappers {
         map.put("tirePressurePsi", axlePair(r.tirePressurePsi()));
         map.put("camberDegrees", axlePair(r.camberDegrees()));
         map.put("toeDegrees", axlePair(r.toeDegrees()));
+        map.put("frontCasterDegrees", r.frontCasterDegrees());
+        map.put("rideHeightMm", axlePair(r.rideHeightMm()));
+        map.put("aeroLevel", axlePair(r.aeroLevel()));
+        map.put("brakeBalanceFrontPct", r.brakeBalanceFrontPct());
+        map.put("brakePressurePct", r.brakePressurePct());
+        map.put("diffAccelLockPct", r.diffAccelLockPct());
+        map.put("diffDecelLockPct", r.diffDecelLockPct());
         map.put("antiRollBarStiffness", axlePair(r.antiRollBarStiffness()));
-        map.put("springRateLbsPerIn", axlePair(r.springRateLbsPerIn()));
+        map.put("springRateNmm", axlePair(r.springRateNmm()));
         map.put("reboundDamping", axlePair(r.reboundDamping()));
         map.put("bumpDamping", axlePair(r.bumpDamping()));
 
