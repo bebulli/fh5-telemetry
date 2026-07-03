@@ -55,6 +55,35 @@ Other modes, all run the same way with an argument after `Main`:
   accel (g)      x= 0.02 y=-1.00 z= 0.11
 ```
 
+## Packet format
+
+FH5's "Data Out" feed isn't officially documented for FH5 specifically. The closest official reference is Microsoft's Forza Horizon 6 Data Out documentation, which describes the same underlying wire format Horizon titles have used since FH4. Community parsers for FM7/FH4/FH5 fill in the rest, but they disagree with each other on some of the details, so this project treats the packet layout as something to verify against a real capture rather than something to trust blindly from any one source.
+
+Two packet sizes come over the wire, both little-endian:
+
+- **Sled** (232 bytes): physics only (RPM, acceleration/velocity, suspension travel, tire slip, car ordinal/class/PI, drivetrain type). This layout has been stable since FM6/FM7 and is consistent across every source I checked.
+- **Dash** (324 bytes): what FH5 actually sends. A superset of Sled with dashboard fields appended (position, speed, power, torque, tire temp, fuel, lap timing, pedal and gear inputs).
+
+The part that isn't consistent across sources: where the Dash-only fields actually start. Naively appending them right after the Sled fields (byte 232) produces a packet that's the wrong length and, worse, decodes to nonsense. The real layout has 12 bytes of unidentified data between the two sections, so the dashboard fields start at byte 244, not 232:
+
+| Field | Offset | Type |
+|---|---|---|
+| `IsRaceOn` | 0 | int32 |
+| `CurrentEngineRpm` | 16 | float |
+| `TireSlipRatio` (FL/FR/RL/RR) | 84 | float x4 |
+| `CarPerformanceIndex` | 220 | int32 |
+| `DrivetrainType` | 224 | int32 |
+| *(12 bytes, unidentified)* | 232 | - |
+| `Speed` | 256 | float |
+| `Power` | 260 | float |
+| `Torque` | 264 | float |
+| `TireTemp` (FL/FR/RL/RR) | 268 | float x4 |
+| `Gear` | 319 | uint8 |
+
+I found the 12-byte gap by capturing live packets from my own PS5 session and decoding them against the naive (no-gap) layout first: speed, fuel, torque and tire temp all came back physically impossible (468 mph, 14,264% fuel, tire temps that don't track with slip). Shifting the Dash-only fields by 12 bytes fixed all of that, and I cross-checked the result against a real physics identity (`power_hp = torque_Nm × rpm / 9549 × 1.341`) computed from the decoded values: it matched the reported power to within floating point rounding. Speed, gear, RPM and fuel also matched what was showing on screen at the time. That validation lives in [PacketLayout.java](src/main/java/com/fh5/telemetry/parser/PacketLayout.java), the single place both the parser and the sample packet builder get their offsets from, so decode and encode can't drift out of sync with each other.
+
+Decoding itself is a flat `ByteBuffer.wrap(...).order(LITTLE_ENDIAN)` read at fixed offsets, no framing or length-prefixing to worry about since each UDP datagram is exactly one packet. [TelemetryParser.java](src/main/java/com/fh5/telemetry/parser/TelemetryParser.java) picks Sled vs Dash decoding purely from the datagram length.
+
 ## How the tuning recommendations work
 
 Drivetrain and Performance Index are already in the telemetry, so the web UI fills those in for you, along with an estimate of power (the highest power reading seen so far in the driving sample, not the car's official rated figure). Weight is the one thing that genuinely isn't in the telemetry (Forza only sends a car/class ordinal, no lookup table for mass), so that stays manual. If the PI changes mid-session (you swapped cars or changed the build), the sample window, peak power, top speed and tuning history all reset automatically since none of it describes what you're driving now.
