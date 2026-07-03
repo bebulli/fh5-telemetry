@@ -57,22 +57,16 @@ Other modes, all run the same way with an argument after `Main`:
 
 ## How the tuning recommendations work
 
-Drivetrain and Performance Index are already in the telemetry, so the web UI fills those in for you, along with an estimate of power (the highest power reading seen so far in the driving sample, not the car's official rated figure). Weight is the one thing that genuinely isn't in the telemetry (Forza only sends a car/class ordinal, no lookup table for mass), so that stays manual. If the PI changes mid-session (you swapped cars or changed the build), the sample window resets automatically since the old averages no longer describe what you're driving now.
-
-The tuning engine combines that car spec with whatever the tires and suspension are reporting from the driving sample:
+Forza doesn't expose a car's weight, power, drivetrain or gear ratios over telemetry, only a car/class ordinal with no lookup table sent over the wire. So you enter those manually, and the tuning engine combines them with whatever the tires and suspension are reporting from a short driving sample:
 
 - **Tire pressure** starts from a class-based baseline (lower for higher Performance Index, closer to race tire pressures) and shifts based on how hot the tires are actually running versus a normal operating window.
-- **Camber, toe and front caster** start from drivetrain and class baselines, then camber gets nudged by comparing front vs rear tire slip angle. Front slip angle running noticeably higher than rear is an understeer signature and adds front camber; the reverse adds rear camber. More caster is suggested when understeer is reported since it increases camber gain while turning.
-- **Ride height** leans lower for higher PI (with a bit of front rake for grip-style setups) and gets raised on whichever axle telemetry shows bottoming out, in addition to stiffening that axle's spring.
-- **Aero** scales up with PI and drops sharply for a drift setup, since downforce fights the rotation a drift needs.
-- **Brake balance and pressure** default to a front-biased split adjusted for weight distribution, with pressure trending higher for higher-PI cars.
-- **Differential lock (accel/decel)** starts from typical per-drivetrain baselines, climbs for a drift setup so the car holds a slide predictably, and climbs further if traction loss is reported.
+- **Camber and toe** start from drivetrain and class baselines, then get nudged by comparing front vs rear tire slip angle. Front slip angle running noticeably higher than rear is an understeer signature and adds front camber; the reverse adds rear camber.
 - **Anti-roll bars** follow the classic drivetrain tendencies (FWD leans soft front/stiff rear, RWD the opposite) scaled by weight and PI, then adjusted the same way as camber.
-- **Springs** scale with weight on each axle and get stiffened further if suspension travel telemetry shows the car bottoming out. The N/mm range this produces (roughly 528 to 2641) matches the bounds of FH5's own spring rate slider on a race-modified car.
+- **Springs** scale with weight on each axle and get stiffened further if suspension travel telemetry shows the car bottoming out.
 - **Dampers** are derived from the spring rates.
 - **Gearing** is descriptive rather than exact ratios, since the ratio table isn't in the telemetry, it leans toward acceleration or top speed based on power-to-weight.
 
-Choosing **Drift** instead of **Grip** doesn't rerun different math from scratch, it applies a second pass of adjustments on top: less rear pressure and camber (looser rear end), more front bite, a stiffer rear bar, less aero, more differential lock, and shorter gearing to hold the car in its torque band mid-slide.
+Choosing **Drift** instead of **Grip** doesn't rerun different math from scratch, it applies a second pass of adjustments on top: less rear pressure and camber (looser rear end), more front bite, a stiffer rear bar, and shorter gearing to hold the car in its torque band mid-slide.
 
 The web UI also has a checklist (understeer, oversteer, traction loss, bouncy/bottoming-out suspension) so you can tell it directly what the car is doing instead of waiting for the telemetry averages to pick it up. Checking one applies its own corrective nudge on top of whatever the telemetry already suggested, and shows up as a separate note in the result so you can see which adjustments came from your input versus the data.
 

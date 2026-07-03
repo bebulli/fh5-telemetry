@@ -28,7 +28,7 @@ public final class UdpListener {
                 : InetAddress.getByName(bindAddress);
         socket = address == null ? new DatagramSocket(port) : new DatagramSocket(port, address);
         boundAddress = bindAddress;
-        boundPort = socket.getLocalPort();
+        boundPort = port;
 
         DatagramSocket socketRef = socket;
         thread = new Thread(() -> runLoop(socketRef, handler), "udp-telemetry-listener");
