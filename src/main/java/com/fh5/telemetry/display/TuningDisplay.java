@@ -11,12 +11,15 @@ public final class TuningDisplay {
         printAxle("Camber (deg)", r.camberDegrees());
         printAxle("Toe (deg)", r.toeDegrees());
         System.out.printf("  %-22s %7.2f%n", "Front caster (deg)", r.frontCasterDegrees());
-        printAxle("Ride height (mm)", r.rideHeightMm());
-        printAxle("Aero level", r.aeroLevel());
+        printAxle("Ride height (0-10)", r.rideHeightLevel());
+        printAxle("Aero (kgf)", r.aeroKgf());
         System.out.printf("  %-22s %7.2f%n", "Brake balance (%F)", r.brakeBalanceFrontPct());
         System.out.printf("  %-22s %7.2f%n", "Brake pressure (%)", r.brakePressurePct());
         System.out.printf("  %-22s %7.2f%n", "Diff accel lock (%)", r.diffAccelLockPct());
         System.out.printf("  %-22s %7.2f%n", "Diff decel lock (%)", r.diffDecelLockPct());
+        r.rearDiffAccelLockPct().ifPresent(v -> System.out.printf("  %-22s %7.2f%n", "Rear diff accel (%)", v));
+        r.rearDiffDecelLockPct().ifPresent(v -> System.out.printf("  %-22s %7.2f%n", "Rear diff decel (%)", v));
+        r.centerDiffRearBiasPct().ifPresent(v -> System.out.printf("  %-22s %7.2f%n", "Center split (%rear)", v));
         printAxle("Anti-roll bar", r.antiRollBarStiffness());
         printAxle("Spring rate (N/mm)", r.springRateNmm());
         printAxle("Rebound damping", r.reboundDamping());

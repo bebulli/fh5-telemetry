@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TuningHeuristicsEngineTest {
@@ -156,12 +157,14 @@ class TuningHeuristicsEngineTest {
         TuningRecommendation result = engine.recommend(spec, summaryWithTireTemps(85f, 82f), TuningStyle.GRIP);
 
         assertTrue(result.frontCasterDegrees() >= 1f && result.frontCasterDegrees() <= 7f);
-        assertTrue(result.rideHeightMm().front() >= 80f && result.rideHeightMm().front() <= 200f);
-        assertTrue(result.aeroLevel().front() >= 0f && result.aeroLevel().front() <= 100f);
+        assertTrue(result.rideHeightLevel().front() >= 0f && result.rideHeightLevel().front() <= 10f);
+        assertTrue(result.aeroKgf().front() >= 122f && result.aeroKgf().front() <= 267f);
         assertTrue(result.brakeBalanceFrontPct() >= 25f && result.brakeBalanceFrontPct() <= 75f);
         assertTrue(result.brakePressurePct() >= 50f && result.brakePressurePct() <= 200f);
         assertTrue(result.diffAccelLockPct() >= 0f && result.diffAccelLockPct() <= 100f);
         assertTrue(result.diffDecelLockPct() >= 0f && result.diffDecelLockPct() <= 100f);
+        assertTrue(result.rearDiffAccelLockPct().isEmpty());
+        assertTrue(result.centerDiffRearBiasPct().isEmpty());
     }
 
     @Test
@@ -172,9 +175,42 @@ class TuningHeuristicsEngineTest {
         TuningRecommendation grip = engine.recommend(spec, summary, TuningStyle.GRIP);
         TuningRecommendation drift = engine.recommend(spec, summary, TuningStyle.DRIFT);
 
-        assertTrue(drift.aeroLevel().rear() < grip.aeroLevel().rear());
+        assertTrue(drift.aeroKgf().rear() < grip.aeroKgf().rear());
         assertTrue(drift.diffAccelLockPct() > grip.diffAccelLockPct());
         assertTrue(drift.diffDecelLockPct() > grip.diffDecelLockPct());
+    }
+
+    @Test
+    void awdCarsGetSeparateFrontRearDiffAndCenterSplit() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.AWD, 550f, 800);
+        TuningRecommendation result = engine.recommend(spec, summaryWithTireTemps(85f, 82f), TuningStyle.GRIP);
+
+        assertTrue(result.rearDiffAccelLockPct().isPresent());
+        assertTrue(result.rearDiffDecelLockPct().isPresent());
+        assertTrue(result.centerDiffRearBiasPct().isPresent());
+        assertTrue(result.rearDiffAccelLockPct().get() > result.diffAccelLockPct());
+    }
+
+    @Test
+    void fwdUndersteerLoosensAccelDiffLock() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.FWD, 300f, 500);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
+        TuningRecommendation withUndersteer = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.UNDERSTEER));
+
+        assertTrue(withUndersteer.diffAccelLockPct() < withoutSymptom.diffAccelLockPct());
+    }
+
+    @Test
+    void rwdOversteerLoosensDecelDiffLock() {
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.RWD, 550f, 800);
+        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
+
+        TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
+        TuningRecommendation withOversteer = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.OVERSTEER));
+
+        assertTrue(withOversteer.diffDecelLockPct() < withoutSymptom.diffDecelLockPct());
     }
 
     @Test
@@ -184,5 +220,24 @@ class TuningHeuristicsEngineTest {
         aggregator.add(parser.parse(parked, parked.length));
 
         assertEquals(0, aggregator.sampleCount());
+    }
+
+    @Test
+    void resetPeaksClearsOnlyTopSpeedAndPeakPowerNotSlipAverages() {
+        TelemetrySampleAggregator aggregator = new TelemetrySampleAggregator();
+        byte[] raw = new SamplePacketBuilder().speedMps(40f).tireSlipRatio(0.1f, 0.1f, 0.1f, 0.1f).buildDash();
+        aggregator.add(parser.parse(raw, raw.length));
+
+        assertTrue(aggregator.resetPeaks());
+        TelemetrySampleSummary summary = aggregator.summarize().orElseThrow();
+        assertEquals(0f, summary.topSpeedMps());
+        assertEquals(1, summary.sampleCount());
+        assertEquals(0.1f, summary.avgTireSlipRatio().frontLeft(), 0.001f);
+    }
+
+    @Test
+    void resetPeaksIsANoOpWhenAlreadyZero() {
+        TelemetrySampleAggregator aggregator = new TelemetrySampleAggregator();
+        assertFalse(aggregator.resetPeaks());
     }
 }

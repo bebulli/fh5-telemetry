@@ -98,4 +98,18 @@ public final class TelemetrySampleAggregator {
         topSpeedMps = 0;
         peakPowerWatts = 0;
     }
+
+    /**
+     * Resets only the peak power and top speed, leaving the running slip/temp
+     * averages alone. Useful after a pull to see a fresh peak without losing
+     * the rest of the sample window.
+     *
+     * @return true if there was anything to reset
+     */
+    public synchronized boolean resetPeaks() {
+        boolean hadPeaks = topSpeedMps > 0 || peakPowerWatts > 0;
+        topSpeedMps = 0;
+        peakPowerWatts = 0;
+        return hadPeaks;
+    }
 }

@@ -5,7 +5,7 @@ const PSI_TO_BAR = 0.0689476;
 const KG_TO_LB = 2.20462;
 const NMM_TO_LBIN = 5.71015;
 const NMM_TO_KGFMM = 0.101972;
-const MM_TO_IN = 0.0393701;
+const KGF_TO_LBF = 2.20462;
 
 let currentUnitSystem = localStorage.getItem("unitSystem") || "english";
 let lastTuningResult = null;
@@ -71,8 +71,12 @@ function formatSpring(nMm) {
   return `${nMm.toFixed(2)} N/mm`;
 }
 
-function formatRideHeight(mm) {
-  return isMetric() ? `${(mm / 10).toFixed(1)} cm` : `${(mm * MM_TO_IN).toFixed(2)} in`;
+function formatRideHeightLevel(level) {
+  return level.toFixed(1);
+}
+
+function formatAero(kgf) {
+  return isMetric() ? `${kgf.toFixed(1)} kgf` : `${(kgf * KGF_TO_LBF).toFixed(1)} lbf`;
 }
 
 function convertGuidanceUnits(text) {
@@ -199,17 +203,26 @@ function renderTuning(result) {
       <span>${format(value)}</span>
     </div>`;
 
+  const awdRows = result.centerDiffRearBiasPct !== undefined
+    ? `
+      ${singleRow("Rear diff lock, accel", result.rearDiffAccelLockPct, pct)}
+      ${singleRow("Rear diff lock, decel", result.rearDiffDecelLockPct, pct)}
+      ${singleRow("Center split (% to rear)", result.centerDiffRearBiasPct, pct)}
+    `
+    : "";
+
   container.innerHTML = `
     ${axleRow("Tire pressure", result.tirePressurePsi, formatPressure)}
     ${axleRow("Camber", result.camberDegrees, degrees)}
     ${axleRow("Toe", result.toeDegrees, degrees)}
     ${singleRow("Front caster", result.frontCasterDegrees, degrees)}
-    ${axleRow("Ride height", result.rideHeightMm, formatRideHeight)}
-    ${axleRow("Aero level", result.aeroLevel, plain)}
+    ${axleRow("Ride height (0-10)", result.rideHeightLevel, formatRideHeightLevel)}
+    ${axleRow("Aero", result.aeroKgf, formatAero)}
     ${singleRow("Brake balance (front)", result.brakeBalanceFrontPct, pct)}
     ${singleRow("Brake pressure", result.brakePressurePct, pct)}
-    ${singleRow("Diff lock, accel", result.diffAccelLockPct, pct)}
-    ${singleRow("Diff lock, decel", result.diffDecelLockPct, pct)}
+    ${singleRow(result.centerDiffRearBiasPct !== undefined ? "Front diff lock, accel" : "Diff lock, accel", result.diffAccelLockPct, pct)}
+    ${singleRow(result.centerDiffRearBiasPct !== undefined ? "Front diff lock, decel" : "Diff lock, decel", result.diffDecelLockPct, pct)}
+    ${awdRows}
     ${axleRow("Anti-roll bar", result.antiRollBarStiffness, plain)}
     ${axleRow("Spring rate", result.springRateNmm, formatSpring)}
     ${axleRow("Rebound damping", result.reboundDamping, plain)}
@@ -238,6 +251,8 @@ el("stopRecordingBtn").onclick = () =>
     .catch(showError);
 
 el("resetSampleBtn").onclick = () => postForm("/api/telemetry/reset", {}).catch(showError);
+
+el("resetPeaksBtn").onclick = () => postForm("/api/telemetry/reset-peaks", {}).catch(showError);
 
 function checkedSymptoms() {
   return Array.from(document.querySelectorAll(".symptom:checked"))

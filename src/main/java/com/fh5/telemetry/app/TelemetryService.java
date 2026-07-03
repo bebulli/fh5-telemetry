@@ -19,6 +19,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -33,11 +36,13 @@ import java.util.stream.Stream;
 public final class TelemetryService {
 
     private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final int TUNING_HISTORY_LIMIT = 5;
 
     private final TelemetryParser parser = new TelemetryParser();
     private final UdpListener listener = new UdpListener();
     private final TelemetrySampleAggregator aggregator = new TelemetrySampleAggregator();
     private final TuningHeuristicsEngine tuningEngine = new TuningHeuristicsEngine();
+    private final Deque<TuningRecommendation> tuningHistory = new ArrayDeque<>();
     private final Path recordingsDir;
 
     private volatile TelemetryPacket latestPacket;
@@ -45,6 +50,7 @@ public final class TelemetryService {
     private volatile SessionRecorder activeRecorder;
     private volatile String activeRecordingFile;
     private volatile Thread replayThread;
+    private volatile int lastKnownPerformanceIndex;
 
     public TelemetryService(Path recordingsDir) throws IOException {
         Files.createDirectories(recordingsDir);
@@ -85,6 +91,20 @@ public final class TelemetryService {
 
     public void resetSample() {
         aggregator.reset();
+        clearTuningHistory();
+    }
+
+    /** Resets only peak power and top speed. No-op (returns false) if there was nothing to reset. */
+    public boolean resetPeaks() {
+        boolean reset = aggregator.resetPeaks();
+        if (reset) {
+            clearTuningHistory();
+        }
+        return reset;
+    }
+
+    private synchronized void clearTuningHistory() {
+        tuningHistory.clear();
     }
 
     public boolean isRecording() {
@@ -170,8 +190,51 @@ public final class TelemetryService {
         }
     }
 
-    public Optional<TuningRecommendation> computeTuning(CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms) {
-        return aggregator.summarize().map(summary -> tuningEngine.recommend(spec, summary, style, symptoms));
+    public synchronized Optional<TuningRecommendation> computeTuning(CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms) {
+        return aggregator.summarize().map(summary -> {
+            TuningRecommendation recommendation = tuningEngine.recommend(spec, summary, style, symptoms);
+            recommendation = withHistoryNotes(recommendation);
+
+            tuningHistory.addLast(recommendation);
+            while (tuningHistory.size() > TUNING_HISTORY_LIMIT) {
+                tuningHistory.removeFirst();
+            }
+            return recommendation;
+        });
+    }
+
+    /**
+     * If the same issue the engine flagged last time is still showing up now,
+     * says so. That's the signal that the previous tune (if it was actually
+     * applied) didn't fully fix it and might need a stronger change than the
+     * automatic adjustment gives.
+     */
+    private TuningRecommendation withHistoryNotes(TuningRecommendation recommendation) {
+        if (tuningHistory.isEmpty()) {
+            return recommendation;
+        }
+        TuningRecommendation previous = tuningHistory.peekLast();
+        List<String> stillFlagged = recommendation.notes().stream()
+                .filter(previous.notes()::contains)
+                .toList();
+        if (stillFlagged.isEmpty()) {
+            return recommendation;
+        }
+
+        List<String> notes = new ArrayList<>(recommendation.notes());
+        notes.add("Attempt #" + (tuningHistory.size() + 1) + " for this car: the same issue showed up again ("
+                + String.join("; ", stillFlagged)
+                + "). If the last tune was already applied in-game, this spot may need a bigger change than these automatic increments.");
+
+        return new TuningRecommendation(
+                recommendation.style(), recommendation.tirePressurePsi(), recommendation.gearing(),
+                recommendation.camberDegrees(), recommendation.toeDegrees(), recommendation.frontCasterDegrees(),
+                recommendation.rideHeightLevel(), recommendation.aeroKgf(),
+                recommendation.brakeBalanceFrontPct(), recommendation.brakePressurePct(),
+                recommendation.diffAccelLockPct(), recommendation.diffDecelLockPct(),
+                recommendation.rearDiffAccelLockPct(), recommendation.rearDiffDecelLockPct(), recommendation.centerDiffRearBiasPct(),
+                recommendation.antiRollBarStiffness(), recommendation.springRateNmm(),
+                recommendation.reboundDamping(), recommendation.bumpDamping(), notes);
     }
 
     private void onPacket(byte[] data, int length, String senderAddress) {
@@ -179,6 +242,19 @@ public final class TelemetryService {
             TelemetryPacket packet = parser.parse(data, length);
             latestPacket = packet;
             packetsReceived.incrementAndGet();
+
+            int performanceIndex = packet.carPerformanceIndex();
+            if (performanceIndex > 0) {
+                if (lastKnownPerformanceIndex > 0 && performanceIndex != lastKnownPerformanceIndex) {
+                    // A different PI means a different car (swap or upgrade), the sample
+                    // window (including peak power and top speed) and tuning history no
+                    // longer describe what's being driven now.
+                    aggregator.reset();
+                    clearTuningHistory();
+                }
+                lastKnownPerformanceIndex = performanceIndex;
+            }
+
             aggregator.add(packet);
 
             SessionRecorder recorder = activeRecorder;

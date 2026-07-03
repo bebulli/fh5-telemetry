@@ -47,6 +47,7 @@ public final class ApiServer {
         server.createContext("/api/telemetry/latest", this::handleLatest);
         server.createContext("/api/telemetry/summary", this::handleSummary);
         server.createContext("/api/telemetry/reset", this::handleReset);
+        server.createContext("/api/telemetry/reset-peaks", this::handleResetPeaks);
         server.createContext("/api/recording/start", this::handleRecordingStart);
         server.createContext("/api/recording/stop", this::handleRecordingStop);
         server.createContext("/api/recordings", this::handleRecordings);
@@ -113,6 +114,11 @@ public final class ApiServer {
     private void handleReset(HttpExchange exchange) throws IOException {
         service.resetSample();
         sendJson(exchange, 200, Map.of("reset", true));
+    }
+
+    private void handleResetPeaks(HttpExchange exchange) throws IOException {
+        boolean reset = service.resetPeaks();
+        sendJson(exchange, 200, Map.of("reset", reset));
     }
 
     private void handleRecordingStart(HttpExchange exchange) throws IOException {
