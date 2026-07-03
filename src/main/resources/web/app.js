@@ -159,9 +159,19 @@ async function refreshLatest() {
 
 async function refreshSummary() {
   const summary = await getJson("/api/telemetry/summary");
-  if (!summary || summary.peakPowerHp === undefined) {
+  if (!summary) {
+    el("peakPower").textContent = "-";
+    el("maxSpeed").textContent = "-";
     return;
   }
+
+  el("maxSpeed").textContent = formatSpeed(summary.topSpeedMph);
+
+  if (summary.peakPowerHp === undefined) {
+    el("peakPower").textContent = "-";
+    return;
+  }
+  el("peakPower").textContent = `${Math.round(summary.peakPowerHp)} hp`;
   setIfNotFocused("powerHp", Math.round(summary.peakPowerHp));
 }
 

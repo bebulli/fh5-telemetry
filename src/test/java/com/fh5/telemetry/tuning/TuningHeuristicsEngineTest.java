@@ -125,18 +125,6 @@ class TuningHeuristicsEngineTest {
     }
 
     @Test
-    void reportedBouncySuspensionStiffensBothAxles() {
-        CarSpec spec = new CarSpec(1500f, DrivetrainType.AWD, 550f, 800);
-        TelemetrySampleSummary summary = summaryWithTireTemps(85f, 82f);
-
-        TuningRecommendation withoutSymptom = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of());
-        TuningRecommendation withBounce = engine.recommend(spec, summary, TuningStyle.GRIP, Set.of(DrivingSymptom.BOUNCY_SUSPENSION));
-
-        assertTrue(withBounce.springRateNmm().front() > withoutSymptom.springRateNmm().front());
-        assertTrue(withBounce.springRateNmm().rear() > withoutSymptom.springRateNmm().rear());
-    }
-
-    @Test
     void springRateStaysWithinRealGameBounds() {
         CarSpec light = new CarSpec(900f, DrivetrainType.FWD, 200f, 200);
         CarSpec heavy = new CarSpec(2400f, DrivetrainType.AWD, 1200f, 999);

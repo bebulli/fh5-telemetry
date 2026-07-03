@@ -28,6 +28,7 @@
         <option value="kgfmm">kgf/mm</option>
       </select>
     </label>
+    <button id="resetPeaksBtn">Reset peak power &amp; max speed</button>
   </div>
 </header>
 
@@ -41,6 +42,8 @@
       <div class="stat"><span class="label">Drivetrain</span><span id="drivetrain" class="value">-</span></div>
       <div class="stat"><span class="label">Car ordinal / class / PI</span><span id="carInfo" class="value">-</span></div>
       <div class="stat"><span class="label">Packets received</span><span id="packetsReceived" class="value">-</span></div>
+      <div class="stat"><span class="label">Peak power (session)</span><span id="peakPower" class="value">-</span></div>
+      <div class="stat"><span class="label">Max speed (session)</span><span id="maxSpeed" class="value">-</span></div>
     </div>
 
     <h3>Tire slip ratio</h3>
@@ -60,7 +63,6 @@
       <button id="startRecordingBtn">Start recording</button>
       <button id="stopRecordingBtn">Stop recording</button>
       <button id="resetSampleBtn">Reset sample window</button>
-      <button id="resetPeaksBtn">Reset peak power &amp; max speed</button>
     </div>
     <p id="recordingStatus" class="status">not recording</p>
     <h3>Saved sessions</h3>
@@ -92,7 +94,6 @@
       <label><input type="checkbox" class="symptom" value="UNDERSTEER"> Understeer</label>
       <label><input type="checkbox" class="symptom" value="OVERSTEER"> Oversteer</label>
       <label><input type="checkbox" class="symptom" value="TRACTION_LOSS"> Traction loss</label>
-      <label><input type="checkbox" class="symptom" value="BOUNCY_SUSPENSION"> Bouncy / bottoming out</label>
       <button id="tuneBtn">Get recommendation</button>
     </div>
     <div id="tuningResult"></div>

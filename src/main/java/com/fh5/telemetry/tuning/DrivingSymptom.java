@@ -4,6 +4,5 @@ package com.fh5.telemetry.tuning;
 public enum DrivingSymptom {
     UNDERSTEER,
     OVERSTEER,
-    TRACTION_LOSS,
-    BOUNCY_SUSPENSION
+    TRACTION_LOSS
 }

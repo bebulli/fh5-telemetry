@@ -61,7 +61,6 @@ public final class TuningHeuristicsEngine {
     private static final float RACE_RIDE_HEIGHT_RAKE_LEVEL = 0.5f;
     private static final float MIN_RIDE_HEIGHT_LEVEL = 0f;
     private static final float MAX_RIDE_HEIGHT_LEVEL = 10f;
-    private static final float BOTTOMING_RIDE_HEIGHT_RAISE_LEVEL = 1f;
 
     // Real in-game bounds for a race-modified car's aero (downforce) sliders.
     private static final float AERO_MIN_KGF = 122f;
@@ -106,8 +105,6 @@ public final class TuningHeuristicsEngine {
     private static final float SPRING_RATE_MAX_NMM = 2641.3f;
     private static final float SPRING_RATE_PER_TONNE_STREET_NMM = 650f;
     private static final float SPRING_RATE_PER_TONNE_RACE_NMM = 1450f;
-    private static final float SUSPENSION_BOTTOMING_THRESHOLD = 0.85f;
-    private static final float BOTTOMING_SPRING_RATE_BOOST = 1.15f;
     private static final float DRIFT_FRONT_SPRING_MULTIPLIER = 1.05f;
     private static final float DRIFT_REAR_SPRING_MULTIPLIER = 0.9f;
 
@@ -119,7 +116,6 @@ public final class TuningHeuristicsEngine {
     private static final float SYMPTOM_TRACTION_LOSS_REAR_PRESSURE_DELTA = -1.5f;
     private static final float SYMPTOM_TRACTION_LOSS_REAR_ARB_DELTA = -4f;
     private static final float SYMPTOM_TRACTION_LOSS_REAR_SPRING_MULTIPLIER = 0.93f;
-    private static final float SYMPTOM_BOUNCY_SPRING_MULTIPLIER = 1.2f;
 
     public TuningRecommendation recommend(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style) {
         return recommend(spec, summary, style, Set.of());
@@ -134,7 +130,7 @@ public final class TuningHeuristicsEngine {
         AxlePair camber = computeCamber(spec, summary, style, symptoms, notes);
         AxlePair toe = computeToe(style);
         float caster = computeCaster(spec, symptoms);
-        AxlePair rideHeight = computeRideHeight(spec, summary, style, notes);
+        AxlePair rideHeight = computeRideHeight(spec, style);
         AxlePair aero = computeAero(spec, style);
         float brakeBalance = computeBrakeBalance(spec);
         float brakePressure = computeBrakePressure(spec);
@@ -147,7 +143,7 @@ public final class TuningHeuristicsEngine {
         Optional<Float> centerDiffRearBias = isAwd ? Optional.of(computeCenterDiffSplit(style)) : Optional.empty();
 
         AxlePair arb = computeArbStiffness(spec, summary, style, symptoms, notes);
-        AxlePair springRate = computeSpringRate(spec, summary, style, symptoms, notes);
+        AxlePair springRate = computeSpringRate(spec, style, symptoms, notes);
         AxlePair rebound = computeDamper(springRate, DAMPER_REBOUND_FROM_SPRING_RATE);
         AxlePair bump = computeDamper(rebound, DAMPER_BUMP_TO_REBOUND_RATIO);
 
@@ -270,7 +266,7 @@ public final class TuningHeuristicsEngine {
         return clamp(caster, MIN_CASTER_DEGREES, MAX_CASTER_DEGREES);
     }
 
-    private AxlePair computeRideHeight(CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, List<String> notes) {
+    private AxlePair computeRideHeight(CarSpec spec, TuningStyle style) {
         float base = lerpByPerformanceIndex(spec.performanceIndex(), STREET_RIDE_HEIGHT_LEVEL, RACE_RIDE_HEIGHT_LEVEL);
         float front = base;
         float rear = base;
@@ -278,16 +274,6 @@ public final class TuningHeuristicsEngine {
         if (style != TuningStyle.DRIFT) {
             // Slight rake (front lower than rear) helps front grip and airflow to the rear.
             front -= RACE_RIDE_HEIGHT_RAKE_LEVEL;
-        }
-
-        Corners travel = summary.avgSuspensionTravelNormalized();
-        if (travel.frontAverage() > SUSPENSION_BOTTOMING_THRESHOLD) {
-            front += BOTTOMING_RIDE_HEIGHT_RAISE_LEVEL;
-            notes.add("Front suspension travel is near its limit; raised front ride height a bit as well as stiffening the spring.");
-        }
-        if (travel.rearAverage() > SUSPENSION_BOTTOMING_THRESHOLD) {
-            rear += BOTTOMING_RIDE_HEIGHT_RAISE_LEVEL;
-            notes.add("Rear suspension travel is near its limit; raised rear ride height a bit as well as stiffening the spring.");
         }
 
         return new AxlePair(
@@ -422,23 +408,13 @@ public final class TuningHeuristicsEngine {
     }
 
     private AxlePair computeSpringRate(
-            CarSpec spec, TelemetrySampleSummary summary, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
+            CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms, List<String> notes) {
         float ratePerTonne = lerpByPerformanceIndex(spec.performanceIndex(), SPRING_RATE_PER_TONNE_STREET_NMM, SPRING_RATE_PER_TONNE_RACE_NMM);
         float frontTonnes = spec.weightKg() / 1000f * (spec.frontWeightDistributionPct() / 100f);
         float rearTonnes = spec.weightKg() / 1000f * (1 - spec.frontWeightDistributionPct() / 100f);
 
         float front = ratePerTonne * frontTonnes;
         float rear = ratePerTonne * rearTonnes;
-
-        Corners travel = summary.avgSuspensionTravelNormalized();
-        if (travel.frontAverage() > SUSPENSION_BOTTOMING_THRESHOLD) {
-            front *= BOTTOMING_SPRING_RATE_BOOST;
-            notes.add("Front suspension travel is near its limit; stiffened front springs to reduce bottoming out.");
-        }
-        if (travel.rearAverage() > SUSPENSION_BOTTOMING_THRESHOLD) {
-            rear *= BOTTOMING_SPRING_RATE_BOOST;
-            notes.add("Rear suspension travel is near its limit; stiffened rear springs to reduce bottoming out.");
-        }
 
         if (style == TuningStyle.DRIFT) {
             front *= DRIFT_FRONT_SPRING_MULTIPLIER;
@@ -448,11 +424,6 @@ public final class TuningHeuristicsEngine {
         if (symptoms.contains(DrivingSymptom.TRACTION_LOSS)) {
             rear *= SYMPTOM_TRACTION_LOSS_REAR_SPRING_MULTIPLIER;
             notes.add("Reported traction loss: softened rear springs to keep a more consistent contact patch under power.");
-        }
-        if (symptoms.contains(DrivingSymptom.BOUNCY_SUSPENSION)) {
-            front *= SYMPTOM_BOUNCY_SPRING_MULTIPLIER;
-            rear *= SYMPTOM_BOUNCY_SPRING_MULTIPLIER;
-            notes.add("Reported bouncy/bottoming-out suspension: stiffened springs on both axles.");
         }
 
         return new AxlePair(
