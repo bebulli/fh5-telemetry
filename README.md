@@ -1,6 +1,8 @@
 # FH5 Telemetry
 
-A little telemetry tool for Forza Horizon 5. It listens for the game's UDP "Data Out" feed, decodes the packets, and turns a short driving sample into a starting tuning setup. Built to run on a PC while the game itself runs on a PS5 on the same network.
+[![Forza Horizon 5 Live Telemetry Tune Generator](https://img.youtube.com/vi/WYK3J0ajaR4/0.jpg)](https://www.youtube.com/watch?v=WYK3J0ajaR4)
+
+A little telemetry tool for Forza Horizon 5, made for fun as a side project. It listens for the game's UDP "Data Out" feed, decodes the packets, and turns a short driving sample into a starting tuning setup. Built to run on a PC while the game itself runs on a PS5 on the same network.
 
 ## What it does
 
