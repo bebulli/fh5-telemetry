@@ -149,6 +149,45 @@ class TelemetryServiceTest {
     }
 
     @Test
+    void computeRecordingTuningUsesOnlyTheRecordedSession(@TempDir Path tempDir) throws Exception {
+        service = new TelemetryService(tempDir.resolve("recordings"));
+        service.startListening("127.0.0.1", 0);
+        int port = service.boundPort();
+
+        String filename = service.startRecording("tuning-test");
+        byte[] driving = new SamplePacketBuilder()
+                .carPerformanceIndex(700)
+                .drivetrainType(1)
+                .speedMps(40f)
+                .tireSlipAngle(0.3f, 0.3f, 0.05f, 0.05f)
+                .buildDash();
+        send(port, driving);
+        send(port, driving);
+        service.stopRecording();
+
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.RWD, 550f, 700);
+        TuningRecommendation recommendation =
+                service.computeRecordingTuning(filename, spec, TuningStyle.GRIP, Set.of()).orElseThrow();
+
+        assertTrue(recommendation.notes().stream().anyMatch(n -> n.contains("understeer")));
+    }
+
+    @Test
+    void computeRecordingTuningIsEmptyWhenRecordingHasNoDrivingSamples(@TempDir Path tempDir) throws Exception {
+        service = new TelemetryService(tempDir.resolve("recordings"));
+        service.startListening("127.0.0.1", 0);
+        int port = service.boundPort();
+
+        String filename = service.startRecording("parked-only");
+        byte[] parked = new SamplePacketBuilder().speedMps(0f).buildDash();
+        send(port, parked);
+        service.stopRecording();
+
+        CarSpec spec = new CarSpec(1500f, DrivetrainType.RWD, 550f, 700);
+        assertTrue(service.computeRecordingTuning(filename, spec, TuningStyle.GRIP, Set.of()).isEmpty());
+    }
+
+    @Test
     void readRecordingWindowFiltersByElapsedTime(@TempDir Path tempDir) throws Exception {
         service = new TelemetryService(tempDir.resolve("recordings"));
         service.startListening("127.0.0.1", 0);

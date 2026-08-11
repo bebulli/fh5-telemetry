@@ -55,6 +55,7 @@ public final class ApiServer {
         server.createContext("/api/recordings/replay", this::handleReplay);
         server.createContext("/api/recordings/summary", this::handleRecordingSummary);
         server.createContext("/api/recordings/telemetry", this::handleRecordingTelemetry);
+        server.createContext("/api/recordings/tuning", this::handleRecordingTuning);
         server.createContext("/api/tuning", this::handleTuning);
         server.createContext("/", new StaticFileHandler());
     }
@@ -195,16 +196,9 @@ public final class ApiServer {
     private void handleTuning(HttpExchange exchange) throws IOException {
         try {
             RequestParams params = RequestParams.from(exchange);
-            CarSpec spec = new CarSpec(
-                    params.requireFloat("weightKg"),
-                    DrivetrainType.valueOf(params.require("drivetrain").toUpperCase()),
-                    params.requireFloat("powerHp"),
-                    params.requireInt("performanceIndex"),
-                    Float.parseFloat(params.get("frontWeightDistributionPct", "50")));
-            TuningStyle style = TuningStyle.valueOf(params.get("style", "GRIP").toUpperCase());
-            Set<DrivingSymptom> symptoms = parseSymptoms(params.get("symptoms", ""));
+            TuningRequest request = parseTuningRequest(params);
 
-            Optional<TuningRecommendation> recommendation = service.computeTuning(spec, style, symptoms);
+            Optional<TuningRecommendation> recommendation = service.computeTuning(request.spec(), request.style(), request.symptoms());
             if (recommendation.isEmpty()) {
                 sendJson(exchange, 400, error("No driving samples yet. Drive for a few seconds first."));
                 return;
@@ -213,6 +207,39 @@ public final class ApiServer {
         } catch (Exception e) {
             sendJson(exchange, 400, error(e.getMessage()));
         }
+    }
+
+    private void handleRecordingTuning(HttpExchange exchange) throws IOException {
+        try {
+            RequestParams params = RequestParams.from(exchange);
+            String file = params.require("file");
+            TuningRequest request = parseTuningRequest(params);
+
+            Optional<TuningRecommendation> recommendation =
+                    service.computeRecordingTuning(file, request.spec(), request.style(), request.symptoms());
+            if (recommendation.isEmpty()) {
+                sendJson(exchange, 400, error("Recording has no driving samples."));
+                return;
+            }
+            sendJson(exchange, 200, JsonMappers.tuningRecommendation(recommendation.get()));
+        } catch (Exception e) {
+            sendJson(exchange, 400, error(e.getMessage()));
+        }
+    }
+
+    private record TuningRequest(CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms) {
+    }
+
+    private static TuningRequest parseTuningRequest(RequestParams params) {
+        CarSpec spec = new CarSpec(
+                params.requireFloat("weightKg"),
+                DrivetrainType.valueOf(params.require("drivetrain").toUpperCase()),
+                params.requireFloat("powerHp"),
+                params.requireInt("performanceIndex"),
+                Float.parseFloat(params.get("frontWeightDistributionPct", "50")));
+        TuningStyle style = TuningStyle.valueOf(params.get("style", "GRIP").toUpperCase());
+        Set<DrivingSymptom> symptoms = parseSymptoms(params.get("symptoms", ""));
+        return new TuningRequest(spec, style, symptoms);
     }
 
     private static Set<DrivingSymptom> parseSymptoms(String csv) {

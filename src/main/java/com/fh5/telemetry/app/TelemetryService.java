@@ -157,6 +157,25 @@ public final class TelemetryService {
      */
     public RecordingSummary readRecordingSummary(String filename) throws IOException {
         Path file = requireRecording(filename);
+        RecordingScan scan = scanRecording(file);
+        return new RecordingSummary(
+                filename, scan.durationMs(), scan.totalPacketCount(),
+                scan.carOrdinal(), scan.carClass(), scan.carPerformanceIndex(), scan.drivetrain(),
+                scan.aggregator().summarize());
+    }
+
+    /**
+     * Runs the tuning engine against one recording instead of the live sample
+     * window. Empty if the recording has no driving samples at all.
+     */
+    public Optional<TuningRecommendation> computeRecordingTuning(
+            String filename, CarSpec spec, TuningStyle style, Set<DrivingSymptom> symptoms) throws IOException {
+        Path file = requireRecording(filename);
+        RecordingScan scan = scanRecording(file);
+        return scan.aggregator().summarize().map(summary -> tuningEngine.recommend(spec, summary, style, symptoms));
+    }
+
+    private RecordingScan scanRecording(Path file) throws IOException {
         TelemetryParser localParser = new TelemetryParser();
         TelemetrySampleAggregator localAggregator = new TelemetrySampleAggregator();
 
@@ -186,10 +205,13 @@ public final class TelemetryService {
             }
         }
 
-        return new RecordingSummary(
-                filename, durationMs, totalPacketCount,
-                carOrdinal, carClass, carPerformanceIndex, drivetrain,
-                localAggregator.summarize());
+        return new RecordingScan(totalPacketCount, durationMs, carOrdinal, carClass, carPerformanceIndex, drivetrain, localAggregator);
+    }
+
+    private record RecordingScan(
+            int totalPacketCount, long durationMs,
+            int carOrdinal, int carClass, int carPerformanceIndex, DrivetrainType drivetrain,
+            TelemetrySampleAggregator aggregator) {
     }
 
     /** Reads whichever recorded samples fall within [startMs, endMs], in original order. */
