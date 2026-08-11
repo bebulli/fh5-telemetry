@@ -19,6 +19,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -52,6 +53,8 @@ public final class ApiServer {
         server.createContext("/api/recording/stop", this::handleRecordingStop);
         server.createContext("/api/recordings", this::handleRecordings);
         server.createContext("/api/recordings/replay", this::handleReplay);
+        server.createContext("/api/recordings/summary", this::handleRecordingSummary);
+        server.createContext("/api/recordings/telemetry", this::handleRecordingTelemetry);
         server.createContext("/api/tuning", this::handleTuning);
         server.createContext("/", new StaticFileHandler());
     }
@@ -146,6 +149,36 @@ public final class ApiServer {
 
     private void handleRecordings(HttpExchange exchange) throws IOException {
         sendJson(exchange, 200, Map.of("recordings", service.listRecordings()));
+    }
+
+    private void handleRecordingSummary(HttpExchange exchange) throws IOException {
+        try {
+            RequestParams params = RequestParams.from(exchange);
+            String file = params.require("file");
+            sendJson(exchange, 200, JsonMappers.recordingSummary(service.readRecordingSummary(file)));
+        } catch (Exception e) {
+            sendJson(exchange, 400, error(e.getMessage()));
+        }
+    }
+
+    private void handleRecordingTelemetry(HttpExchange exchange) throws IOException {
+        try {
+            RequestParams params = RequestParams.from(exchange);
+            String file = params.require("file");
+            long startMs = params.getLong("startMs", 0);
+            long endMs = params.getLong("endMs", Long.MAX_VALUE);
+
+            List<Map<String, Object>> samples = service.readRecordingWindow(file, startMs, endMs).stream()
+                    .map(JsonMappers::recordedSample)
+                    .toList();
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("file", file);
+            body.put("samples", samples);
+            sendJson(exchange, 200, body);
+        } catch (Exception e) {
+            sendJson(exchange, 400, error(e.getMessage()));
+        }
     }
 
     private void handleReplay(HttpExchange exchange) throws IOException {

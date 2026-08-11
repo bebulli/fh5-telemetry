@@ -67,6 +67,11 @@ public final class RequestParams {
         return value == null || value.isBlank() ? defaultValue : Integer.parseInt(value);
     }
 
+    public long getLong(String key, long defaultValue) {
+        String value = values.get(key);
+        return value == null || value.isBlank() ? defaultValue : Long.parseLong(value);
+    }
+
     public float requireFloat(String key) {
         return Float.parseFloat(require(key));
     }

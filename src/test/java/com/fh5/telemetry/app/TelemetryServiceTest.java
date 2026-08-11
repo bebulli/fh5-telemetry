@@ -9,14 +9,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryServiceTest {
@@ -121,5 +124,53 @@ class TelemetryServiceTest {
     void resetPeaksIsANoOpWhenNothingToReset(@TempDir Path tempDir) throws Exception {
         service = new TelemetryService(tempDir.resolve("recordings"));
         assertFalse(service.resetPeaks());
+    }
+
+    @Test
+    void readRecordingSummaryReflectsRecordedSamples(@TempDir Path tempDir) throws Exception {
+        service = new TelemetryService(tempDir.resolve("recordings"));
+        service.startListening("127.0.0.1", 0);
+        int port = service.boundPort();
+
+        String filename = service.startRecording("test");
+        byte[] driving = new SamplePacketBuilder().carPerformanceIndex(700).drivetrainType(1).speedMps(40f).buildDash();
+        send(port, driving);
+        send(port, driving);
+        service.stopRecording();
+
+        RecordingSummary summary = service.readRecordingSummary(filename);
+
+        assertEquals(filename, summary.file());
+        assertEquals(2, summary.totalPacketCount());
+        assertEquals(700, summary.carPerformanceIndex());
+        assertEquals(DrivetrainType.RWD, summary.drivetrain());
+        assertTrue(summary.drivingSummary().isPresent());
+        assertEquals(2, summary.drivingSummary().get().sampleCount());
+    }
+
+    @Test
+    void readRecordingWindowFiltersByElapsedTime(@TempDir Path tempDir) throws Exception {
+        service = new TelemetryService(tempDir.resolve("recordings"));
+        service.startListening("127.0.0.1", 0);
+        int port = service.boundPort();
+
+        String filename = service.startRecording("window-test");
+        byte[] driving = new SamplePacketBuilder().carPerformanceIndex(700).speedMps(40f).buildDash();
+        send(port, driving);
+        send(port, driving);
+        send(port, driving);
+        service.stopRecording();
+
+        List<RecordedSample> all = service.readRecordingWindow(filename, 0, Long.MAX_VALUE);
+        assertEquals(3, all.size());
+
+        List<RecordedSample> tailOnly = service.readRecordingWindow(filename, all.get(1).elapsedMillis(), Long.MAX_VALUE);
+        assertEquals(2, tailOnly.size());
+    }
+
+    @Test
+    void readRecordingSummaryFailsForUnknownFile(@TempDir Path tempDir) throws Exception {
+        service = new TelemetryService(tempDir.resolve("recordings"));
+        assertThrows(IOException.class, () -> service.readRecordingSummary("does-not-exist.fh5rec"));
     }
 }

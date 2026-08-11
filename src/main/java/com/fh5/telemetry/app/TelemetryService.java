@@ -1,5 +1,6 @@
 package com.fh5.telemetry.app;
 
+import com.fh5.telemetry.model.DrivetrainType;
 import com.fh5.telemetry.model.TelemetryPacket;
 import com.fh5.telemetry.net.UdpListener;
 import com.fh5.telemetry.parser.TelemetryParser;
@@ -149,6 +150,79 @@ public final class TelemetryService {
     }
 
     /**
+     * Reads a recording file directly, without touching the live listener or
+     * aggregator, and summarizes it the same way a live driving sample would
+     * be summarized. Car info comes from the last packet in the file that
+     * reports a nonzero PI, the same menu-tolerant logic used for live packets.
+     */
+    public RecordingSummary readRecordingSummary(String filename) throws IOException {
+        Path file = requireRecording(filename);
+        TelemetryParser localParser = new TelemetryParser();
+        TelemetrySampleAggregator localAggregator = new TelemetrySampleAggregator();
+
+        int totalPacketCount = 0;
+        long durationMs = 0;
+        int carOrdinal = 0;
+        int carClass = 0;
+        int carPerformanceIndex = 0;
+        DrivetrainType drivetrain = DrivetrainType.UNKNOWN;
+
+        try (SessionReader reader = new SessionReader(file)) {
+            Optional<RecordedFrame> frame;
+            while ((frame = reader.readNext()).isPresent()) {
+                RecordedFrame f = frame.get();
+                totalPacketCount++;
+                durationMs = f.elapsedMillis();
+
+                TelemetryPacket packet = localParser.parse(f.data(), f.data().length);
+                localAggregator.add(packet);
+
+                if (packet.carPerformanceIndex() > 0) {
+                    carOrdinal = packet.carOrdinal();
+                    carClass = packet.carClass();
+                    carPerformanceIndex = packet.carPerformanceIndex();
+                    drivetrain = packet.drivetrain();
+                }
+            }
+        }
+
+        return new RecordingSummary(
+                filename, durationMs, totalPacketCount,
+                carOrdinal, carClass, carPerformanceIndex, drivetrain,
+                localAggregator.summarize());
+    }
+
+    /** Reads whichever recorded samples fall within [startMs, endMs], in original order. */
+    public List<RecordedSample> readRecordingWindow(String filename, long startMs, long endMs) throws IOException {
+        Path file = requireRecording(filename);
+        TelemetryParser localParser = new TelemetryParser();
+        List<RecordedSample> samples = new ArrayList<>();
+
+        try (SessionReader reader = new SessionReader(file)) {
+            Optional<RecordedFrame> frame;
+            while ((frame = reader.readNext()).isPresent()) {
+                RecordedFrame f = frame.get();
+                if (f.elapsedMillis() < startMs) {
+                    continue;
+                }
+                if (f.elapsedMillis() > endMs) {
+                    break;
+                }
+                samples.add(new RecordedSample(f.elapsedMillis(), localParser.parse(f.data(), f.data().length)));
+            }
+        }
+        return samples;
+    }
+
+    private Path requireRecording(String filename) throws IOException {
+        Path file = recordingsDir.resolve(filename);
+        if (!Files.exists(file)) {
+            throw new IOException("No such recording: " + filename);
+        }
+        return file;
+    }
+
+    /**
      * Replays a recorded session on a background thread, feeding frames
      * through the same pipeline as live packets (so the UI and tuning
      * aggregator see it as if it were happening now) at its original pacing.
@@ -157,10 +231,7 @@ public final class TelemetryService {
         if (replayThread != null && replayThread.isAlive()) {
             throw new IllegalStateException("A replay is already in progress");
         }
-        Path file = recordingsDir.resolve(filename);
-        if (!Files.exists(file)) {
-            throw new IOException("No such recording: " + filename);
-        }
+        Path file = requireRecording(filename);
 
         replayThread = new Thread(() -> runReplay(file), "session-replay");
         replayThread.setDaemon(true);

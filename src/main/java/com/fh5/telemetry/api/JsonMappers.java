@@ -1,5 +1,7 @@
 package com.fh5.telemetry.api;
 
+import com.fh5.telemetry.app.RecordedSample;
+import com.fh5.telemetry.app.RecordingSummary;
 import com.fh5.telemetry.model.Corners;
 import com.fh5.telemetry.model.TelemetryPacket;
 import com.fh5.telemetry.model.Vector3;
@@ -110,6 +112,26 @@ final class JsonMappers {
         map.put("gearing", gearing);
 
         map.put("notes", r.notes());
+        return map;
+    }
+
+    static Map<String, Object> recordingSummary(RecordingSummary s) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("file", s.file());
+        map.put("durationMs", s.durationMs());
+        map.put("totalPacketCount", s.totalPacketCount());
+        map.put("carOrdinal", s.carOrdinal());
+        map.put("carClass", s.carClass());
+        map.put("carPerformanceIndex", s.carPerformanceIndex());
+        map.put("drivetrain", s.drivetrain().name());
+        s.drivingSummary().ifPresent(summary -> map.put("drivingSummary", sampleSummary(summary)));
+        return map;
+    }
+
+    static Map<String, Object> recordedSample(RecordedSample s) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("elapsedMs", s.elapsedMillis());
+        map.put("telemetry", telemetryPacket(s.packet()));
         return map;
     }
 }
